@@ -27,15 +27,22 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
     
     ImGui::Begin("TELEMETRY", nullptr, ImGuiWindowFlags_NoCollapse);
     
-    // Graphs only
-    float green[3] = {0.3f, 1.0f, 0.3f};
-    float red[3] = {1.0f, 0.3f, 0.3f};
+    // OPTIMIZACIÓN: Un solo DrawList para ambos gráficos
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
+    // Throttle graph
     ImGui::Text("Throttle");
-    renderGraph("Throttle", m_throttleHistory, green);
+    ImVec2 throttle_pos = ImGui::GetCursorScreenPos();
+    float green[3] = {0.3f, 1.0f, 0.3f};
+    renderGraph(draw_list, throttle_pos, "Throttle", m_throttleHistory, green);
+    ImGui::Dummy(ImVec2(GRAPH_WIDTH, GRAPH_HEIGHT));
     
+    // Brake graph
     ImGui::Text("Brake");
-    renderGraph("Brake", m_brakeHistory, red);
+    ImVec2 brake_pos = ImGui::GetCursorScreenPos();
+    float red[3] = {1.0f, 0.3f, 0.3f};
+    renderGraph(draw_list, brake_pos, "Brake", m_brakeHistory, red);
+    ImGui::Dummy(ImVec2(GRAPH_WIDTH, GRAPH_HEIGHT));
     
     ImGui::End();
 }
@@ -52,48 +59,49 @@ void TelemetryWidget::updateHistory(float throttle, float brake) {
     }
 }
 
-void TelemetryWidget::renderGraph(const char* label, const std::deque<float>& data, float color[3]) {
+void TelemetryWidget::renderGraph(ImDrawList* draw_list, ImVec2 canvas_pos, 
+                                   const char* label, const std::deque<float>& data, 
+                                   float color[3]) {
     if (data.empty()) return;
     
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
     ImVec2 canvas_size(GRAPH_WIDTH, GRAPH_HEIGHT);
     
-    // Background
-    draw_list->AddRectFilled(
-        canvas_pos,
-        ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y),
-        IM_COL32(20, 20, 20, 180)
-    );
-    
-    // Draw graph line
+    // OPTIMIZACIÓN: Colors precalculadas
+    ImU32 bg_color = IM_COL32(20, 20, 20, 180);
     ImU32 line_color = IM_COL32(
         static_cast<int>(color[0] * 255),
         static_cast<int>(color[1] * 255),
         static_cast<int>(color[2] * 255),
         255
     );
+    ImU32 border_color = IM_COL32(100, 100, 100, 255);
     
-    float step = canvas_size.x / static_cast<float>(data.size());
+    // Background (1 draw call)
+    draw_list->AddRectFilled(
+        canvas_pos,
+        ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y),
+        bg_color
+    );
     
-    for (size_t i = 1; i < data.size(); i++) {
-        float x1 = canvas_pos.x + (i - 1) * step;
-        float y1 = canvas_pos.y + canvas_size.y * (1.0f - data[i - 1]);
+    // OPTIMIZACIÓN: PathLineTo en vez de múltiples AddLine (1 draw call en vez de N)
+    if (data.size() > 1) {
+        float step = canvas_size.x / static_cast<float>(data.size());
         
-        float x2 = canvas_pos.x + i * step;
-        float y2 = canvas_pos.y + canvas_size.y * (1.0f - data[i]);
-        
-        draw_list->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), line_color, 2.0f);
+        draw_list->PathClear();
+        for (size_t i = 0; i < data.size(); i++) {
+            float x = canvas_pos.x + i * step;
+            float y = canvas_pos.y + canvas_size.y * (1.0f - data[i]);
+            draw_list->PathLineTo(ImVec2(x, y));
+        }
+        draw_list->PathStroke(line_color, 0, 2.0f);
     }
     
-    // Border
+    // Border (1 draw call)
     draw_list->AddRect(
         canvas_pos,
         ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y),
-        IM_COL32(100, 100, 100, 255)
+        border_color
     );
-    
-    ImGui::Dummy(canvas_size);
 }
 
 } // namespace ui

@@ -3,6 +3,10 @@
 
 #include <deque>
 
+// Forward declarations
+struct ImDrawList;
+struct ImVec2;
+
 namespace iracing {
     class IRSDKManager;
 }
@@ -17,7 +21,8 @@ public:
 
 private:
     void updateHistory(float throttle, float brake);
-    void renderGraph(const char* label, const std::deque<float>& data, float color[3]);
+    void renderGraph(ImDrawList* draw_list, ImVec2 canvas_pos, 
+                     const char* label, const std::deque<float>& data, float color[3]);
     
     std::deque<float> m_throttleHistory;
     std::deque<float> m_brakeHistory;
