@@ -24,11 +24,9 @@ public:
     void run();
     void shutdown();
 
-    // Acceso público para que los widgets puedan modificar desde menú contextual (opcional por ahora)
+    // Acceso público para widgets
     bool& getEditModeRef() { return m_editMode; }
     float& getGlobalAlphaRef() { return m_globalAlpha; }
-
-    // Si quieres exponer applyWindowAttributes para que los widgets lo llamen
     void applyWindowAttributes();
 
 private:
@@ -36,7 +34,7 @@ private:
     void setupStyle();
     void renderFrame();
     void processInput();
-    void toggleEditMode();           // ← cambiado de toggleClickThrough
+    void toggleEditMode();
     void saveConfigOnExit();
 
     GLFWwindow* m_window;
@@ -51,8 +49,8 @@ private:
 
     // State
     bool m_running;
-    bool m_editMode;                 // true = edición (drag + menú), false = locked
-    float m_globalAlpha;             // transparencia global
+    bool m_editMode;       // true = edición (drag + menú), false = locked
+    float m_globalAlpha;   // transparencia global
 
     // Window settings
     int m_windowWidth;
