@@ -15,7 +15,6 @@ namespace ui {
 
 OverlayWindow::OverlayWindow()
     : m_window(nullptr)
-    , m_showDemo(false)
     , m_running(false)
     , m_windowWidth(1920)
     , m_windowHeight(1080)
@@ -82,7 +81,6 @@ bool OverlayWindow::initialize() {
     m_running = true;
     
     std::cout << "✅ Overlay initialized" << std::endl;
-    std::cout << "Press ESC to toggle demo window" << std::endl;
     std::cout << "Press Q to quit" << std::endl;
     
     return true;
@@ -134,7 +132,7 @@ void OverlayWindow::run() {
             m_sdk->startup();
         }
         
-        // Wait for data
+        // Wait for data and update
         if (m_sdk->isConnected()) {
             if (m_sdk->waitForData(16)) {
                 m_relative->update();
@@ -166,11 +164,6 @@ void OverlayWindow::renderFrame() {
         ImGui::End();
     }
     
-    // Demo window (for testing)
-    if (m_showDemo) {
-        ImGui::ShowDemoWindow(&m_showDemo);
-    }
-    
     // Rendering
     ImGui::Render();
     int display_w, display_h;
@@ -184,18 +177,6 @@ void OverlayWindow::renderFrame() {
 }
 
 void OverlayWindow::processInput() {
-    // ESC to toggle demo
-    if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-        static bool escPressed = false;
-        if (!escPressed) {
-            m_showDemo = !m_showDemo;
-            escPressed = true;
-        }
-    } else {
-        static bool escPressed = false;
-        escPressed = false;
-    }
-    
     // Q to quit
     if (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) {
         m_running = false;

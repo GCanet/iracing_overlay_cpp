@@ -40,7 +40,6 @@ private:
     std::unique_ptr<TelemetryWidget> m_telemetryWidget;
     
     // State
-    bool m_showDemo;
     bool m_running;
     
     // Window settings

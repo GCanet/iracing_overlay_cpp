@@ -13,45 +13,34 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
     // Get current values
     float throttle = sdk->getFloat("Throttle", 0.0f);
     float brake = sdk->getFloat("Brake", 0.0f);
-    float speed = sdk->getFloat("Speed", 0.0f) * 3.6f; // m/s to km/h
     
     // Update history
-    updateHistory(throttle, brake, speed);
+    updateHistory(throttle, brake);
     
     // Window position (bottom right)
     ImGui::SetNextWindowPos(
-        ImVec2(ImGui::GetIO().DisplaySize.x - 240, 
-               ImGui::GetIO().DisplaySize.y - 220), 
+        ImVec2(ImGui::GetIO().DisplaySize.x - 340, 
+               ImGui::GetIO().DisplaySize.y - 180), 
         ImGuiCond_FirstUseEver
     );
-    ImGui::SetNextWindowSize(ImVec2(220, 200), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(320, 160), ImGuiCond_FirstUseEver);
     
     ImGui::Begin("TELEMETRY", nullptr, ImGuiWindowFlags_NoCollapse);
     
-    // Current values
-    ImGui::Text("Throttle: %.0f%%", throttle * 100.0f);
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "█");
-    
-    ImGui::Text("Brake:    %.0f%%", brake * 100.0f);
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "█");
-    
-    ImGui::Text("Speed:    %.0f km/h", speed);
-    
-    ImGui::Separator();
-    
-    // Graphs
+    // Graphs only
     float green[3] = {0.3f, 1.0f, 0.3f};
     float red[3] = {1.0f, 0.3f, 0.3f};
     
+    ImGui::Text("Throttle");
     renderGraph("Throttle", m_throttleHistory, green);
+    
+    ImGui::Text("Brake");
     renderGraph("Brake", m_brakeHistory, red);
     
     ImGui::End();
 }
 
-void TelemetryWidget::updateHistory(float throttle, float brake, float speed) {
+void TelemetryWidget::updateHistory(float throttle, float brake) {
     m_throttleHistory.push_back(throttle);
     m_brakeHistory.push_back(brake);
     
@@ -77,7 +66,7 @@ void TelemetryWidget::renderGraph(const char* label, const std::deque<float>& da
         IM_COL32(20, 20, 20, 180)
     );
     
-    // Draw graph
+    // Draw graph line
     ImU32 line_color = IM_COL32(
         static_cast<int>(color[0] * 255),
         static_cast<int>(color[1] * 255),
