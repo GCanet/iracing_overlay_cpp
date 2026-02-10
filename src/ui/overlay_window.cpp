@@ -8,6 +8,8 @@
 #define GLFW_INCLUDE_NONE
 
 #include <glad/glad.h>
+#ifdef APIENTRY
+#undef APIENTRY
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
