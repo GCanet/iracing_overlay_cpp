@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(iRacingOverlay VERSION 1.0.0 LANGUAGES CXX)
 
-if(WIN32)
-    add_definitions(-DGLFW_INCLUDE_NONE)
-    # ... existing defines
-endif()
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
