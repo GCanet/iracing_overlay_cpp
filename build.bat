@@ -22,7 +22,7 @@ cd build
 
 REM Configurar con CMake
 echo Configurando proyecto...
-cmake .. -G "Visual Studio 16 2019" -A x64
+cmake .. -A x64
 if %ERRORLEVEL% NEQ 0 (
     echo ERROR: Configuracion fallida
     pause
