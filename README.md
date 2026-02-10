@@ -1,66 +1,97 @@
 # 🏎️ iRacing Overlay
 
-## 🎯 Características
+**A professional, transparent overlay for iRacing with real-time telemetry and race position tracking.**
 
-### Widgets Implementados
+## ✨ New Features (v1.1)
+
+### 🔒 True Overlay Mode
+- **Borderless, always-on-top window** - Stays above iRacing
+- **Click-through mode** - Press `L` to lock widgets (mouse clicks pass through to game)
+- **Persistent window positions** - Widgets remember where you put them
+- **Per-widget transparency** - Customize opacity for each widget
+
+### 💾 Configuration System
+- **Auto-save on exit** - All positions and settings saved to `config.ini`
+- **Customizable:**
+  - Window positions and sizes
+  - Transparency levels (global and per-widget)
+  - Font scaling
+  - Click-through state
+
+---
+
+## 🎯 Features
+
+### Widgets Implemented
 
 #### 1. **Relative** (Posiciones relativas)
-- **Sistema inteligente de visualización:**
-  - Si vas P1-P3: Muestra todos los disponibles (tú + hasta 8 detrás)
-  - Si vas P4+: Muestra 4 delante + tú + 4 detrás (centrado)
-  - Si vas en las últimas: Ajusta automáticamente
-- **Header con información de carrera:**
-  - Nombre de la serie (desde SessionInfo YAML)
-  - Vueltas completadas/Total o tiempo restante
-  - SOF (Strength of Field) calculado en tiempo real
-- **Por cada piloto muestra:**
-  - Posición
-  - Número de coche + Nombre real (desde SessionInfo)
-  - Safety Rating con color según licencia:
-    - R (rojo) = 0.0-0.99
-    - D (naranja) = 1.0-1.99
-    - C (amarillo) = 2.0-2.99
-    - B (verde) = 3.0-3.99
-    - A (azul) = 4.0+
-  - iRating real (desde SessionInfo)
-  - Proyección de iRating (+/- en verde/rojo)
-  - Logo de marca de coche (BMW, Mercedes, Audi, Porsche, Ferrari, Lamborghini, Aston Martin, McLaren, Ford, Chevrolet, Toyota, Mazda)
-  - Tiempo de última vuelta
-  - Gap de distancia relativo al jugador
-- **La fila del jugador se destaca con fondo verde**
-- **Pilotos en pits aparecen griseados**
-- **Transparencia del 60% en el fondo**
+- **Smart visualization system:**
+  - If P1-P3: Shows you + up to 8 behind
+  - If P4+: Shows 4 ahead + you + 4 behind (centered)
+  - If in last positions: Auto-adjusts intelligently
+- **Race header info:**
+  - Series name (from SessionInfo YAML)
+  - Completed laps/Total or time remaining
+  - SOF (Strength of Field) calculated in real-time
+- **Per driver shows:**
+  - Position
+  - Car number + Real name (from SessionInfo)
+  - Safety Rating with license-based color:
+    - R (red) = 0.0-0.99
+    - D (orange) = 1.0-1.99
+    - C (yellow) = 2.0-2.99
+    - B (green) = 3.0-3.99
+    - A (blue) = 4.0+
+  - Real iRating (from SessionInfo)
+  - iRating projection (+/- in green/red)
+  - Car brand logo (BMW, Mercedes, Audi, Porsche, Ferrari, Lamborghini, Aston Martin, McLaren, Ford, Chevrolet, Toyota, Mazda)
+  - Last lap time
+  - Gap relative to player
+- **Player row highlighted with green background**
+- **Drivers in pits shown grayed out**
+- **Configurable transparency**
 
-#### 2. **Telemetría**
-- Gráficos de histórico horizontal (3 segundos)
-- Throttle (verde)
-- Brake (rojo)
-- Actualización en tiempo real a 60Hz
+#### 2. **Telemetry**
+- Horizontal history graphs (3 seconds)
+- Throttle (green)
+- Brake (red)
+- Real-time updates at 60Hz
+- Optimized rendering (single draw list)
 
-## 🛠️ Requisitos
+---
+
+## 🛠️ Requirements
 
 ### Software
 - **Windows 10/11** (64-bit)
-- **iRacing** instalado y corriendo
-- **Visual Studio 2019+** o **MinGW-w64** (para compilar)
+- **iRacing** installed and running
+- **Visual Studio 2019+** or **MinGW-w64** (to compile)
 - **CMake 3.15+**
 - **Git**
 
-### Controles
+---
 
-- **Q**: Salir
-- **Drag**: Mover ventanas
+## 🎮 Controls
 
-## 📦 Compilación
+| Key | Action |
+|-----|--------|
+| **Q** | Quit overlay |
+| **L** | Toggle Lock (enable/disable click-through) |
+| **Drag** | Move widgets (when unlocked) |
+| **Right-click** | Widget context menu (future) |
 
-### 1. Clonar el repositorio
+---
+
+## 📦 Compilation
+
+### 1. Clone repository
 
 ```bash
-git clone https://github.com/tu-usuario/iracing_overlay_cpp.git
+git clone https://github.com/your-user/iracing_overlay_cpp.git
 cd iracing_overlay_cpp
 ```
 
-### 2. Compilar
+### 2. Compile
 
 #### Windows (Visual Studio):
 ```bash
@@ -78,69 +109,102 @@ cmake .. -G "MinGW Makefiles"
 cmake --build . --config Release
 ```
 
-O simplemente ejecuta:
+Or simply run:
 ```bash
 build.bat
 ```
 
-### 3. Ejecutar
+### 3. Run
 
 ```bash
 cd build\bin\Release
 iRacingOverlay.exe
 ```
 
-## 🎮 Uso
+---
 
-1. **Ejecuta el overlay primero**
-2. **Abre iRacing**
-3. **Entra a una sesión** (práctica, carrera, etc.)
-4. El overlay se conectará automáticamente y mostrará datos reales
+## 🎮 Usage
 
-## 🗂️ Estructura del Proyecto
+1. **Run the overlay first**
+2. **Open iRacing**
+3. **Enter a session** (practice, race, etc.)
+4. The overlay connects automatically and displays real data
+
+### First Time Setup
+
+1. Start the overlay (unlocked by default)
+2. Drag widgets to your preferred positions
+3. Press **L** to lock (enable click-through)
+4. Positions auto-save when you quit
+
+### Customization
+
+Edit `config.ini` to customize:
+
+```ini
+[Global]
+FontScale=1.0          # 1.2 for larger text
+ClickThrough=false     # true to start locked
+GlobalAlpha=0.7        # 0.0-1.0 transparency
+
+[Relative]
+Alpha=0.6              # Individual widget transparency
+
+[Telemetry]
+Alpha=0.7
+```
+
+---
+
+## 🗂️ Project Structure
 
 ```
 iracing_overlay_cpp/
 ├── src/
 │   ├── main.cpp              # Entry point
-│   ├── ui/                   # Interfaz
-│   │   ├── overlay_window.*  # Ventana principal
-│   │   ├── relative_widget.* # Widget relativo
-│   │   └── telemetry_widget.*# Widget telemetría
-│   ├── data/                 # Lógica datos
-│   │   ├── irsdk_manager.*   # Wrapper SDK
-│   │   ├── relative_calc.*   # Cálculos relativo + parsing
-│   │   └── irating_calc.*    # Proyección iRating
+│   ├── ui/                   # Interface
+│   │   ├── overlay_window.*  # Main window + click-through
+│   │   ├── relative_widget.* # Relative widget
+│   │   └── telemetry_widget.*# Telemetry widget
+│   ├── data/                 # Data logic
+│   │   ├── irsdk_manager.*   # SDK wrapper
+│   │   ├── relative_calc.*   # Relative calculations + parsing
+│   │   └── irating_calc.*    # iRating projection
 │   └── utils/
-│       ├── config.*          # Configuración (placeholder)
-│       └── yaml_parser.*     # Parser SessionInfo 
+│       ├── config.*          # INI config system
+│       └── yaml_parser.*     # SessionInfo parser
 ├── include/
 │   └── irsdk/
-│       └── irsdk_defines.h   # Headers iRacing SDK
-├── external/                 # Dependencias
+│       └── irsdk_defines.h   # iRacing SDK headers
+├── external/                 # Dependencies (not in git)
 │   ├── imgui/
 │   ├── glfw/
 │   └── glad/
-├── assets/                   # Assets opcionales
-│   └── car_brands/           # Logos PNG
-├── .gitignore                # 
-├── CMakeLists.txt            # Build system actualizado
-├── build.bat                 # Script compilación
-└── README.md                 # Esta documentación
+├── assets/                   # Optional assets
+│   └── car_brands/           # PNG logos
+├── .gitignore
+├── CMakeLists.txt            # Build system
+├── build.bat                 # Build script
+├── config.ini.example        # Example config
+└── README.md                 # This file
 ```
 
-## 🔧 Dependencias
+---
+
+## 🔧 Dependencies
 
 - **Dear ImGui** 1.90.1 - UI framework
-- **GLFW** 3.3.8 - Window management
+- **GLFW** 3.3.8 - Window management (with native Win32 access)
 - **GLAD** - OpenGL loader
 - **iRacing SDK** - Official telemetry API
 
-## 🎨 Assets Opcionales
+---
 
-### Logos de Marcas de Coches
+## 🎨 Optional Assets
 
-Para mostrar los logos de las marcas, coloca las imágenes PNG (128x128 recomendado) en:
+### Car Brand Logos
+
+To display brand logos, place PNG images (128x128 recommended) in:
 
 ```
 assets/car_brands/
@@ -154,16 +218,76 @@ assets/car_brands/
 ├── mclaren.png
 ├── ford.png
 ├── chevrolet.png
-├── toyota.png          
-└── mazda.png           
+├── toyota.png
+└── mazda.png
 ```
+
+---
+
+## 🐛 Troubleshooting
+
+### Overlay not showing above iRacing
+- Make sure you run the overlay BEFORE starting iRacing
+- Press `L` to ensure it's locked (always-on-top)
+
+### Widgets not saving positions
+- Make sure the overlay has write permissions in its directory
+- Check that `config.ini` is being created on exit
+
+### Click-through not working
+- Only works on Windows
+- Make sure you pressed `L` to lock
+- You should see "🔒 LOCKED" indicator
+
+---
 
 ## ⚠️ Disclaimer
 
-Este proyecto usa únicamente la API oficial de iRacing SDK.
-No modifica archivos del juego ni usa memory injection.
-**100% permitido** según términos de servicio de iRacing.
+This project uses only the official iRacing SDK API.
+Does not modify game files or use memory injection.
+**100% allowed** according to iRacing terms of service.
 
-## 📜 Licencia
+---
 
-MIT License - Libre para uso personal y comercial
+## 📝 Changelog
+
+### v1.1 (Current)
+- ✅ True overlay mode (borderless, always-on-top)
+- ✅ Click-through toggle (L key)
+- ✅ Config persistence (positions, sizes, transparency)
+- ✅ Per-widget configuration
+- ✅ Auto-save on exit
+
+### v1.0
+- ✅ Relative widget with smart positioning
+- ✅ Telemetry graphs (throttle/brake)
+- ✅ Real iRating and projections
+- ✅ SOF calculation
+- ✅ Safety Rating display
+
+---
+
+## 📜 License
+
+MIT License - Free for personal and commercial use
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repo
+2. Create a feature branch
+3. Submit a pull request
+
+---
+
+## 🙏 Credits
+
+- iRacing SDK by iRacing.com
+- Dear ImGui by Omar Cornut
+- GLFW by Marcus Geelnard & Camilla Löwy
+
+---
+
+**Made with ❤️ for the iRacing community**
