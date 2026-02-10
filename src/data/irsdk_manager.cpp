@@ -56,7 +56,7 @@ bool IRSDKManager::openSharedMemory() {
     );
     
     if (!m_pSharedMem) {
-        std::cerr << "⚠️ Failed to map view of iRacing shared memory" << std::endl;
+        std::cerr << "Failed to map view of iRacing shared memory" << std::endl;
         CloseHandle(m_hMemMapFile);
         m_hMemMapFile = nullptr;
         return false;
@@ -64,17 +64,24 @@ bool IRSDKManager::openSharedMemory() {
     
     m_pHeader = (const irsdk_header*)m_pSharedMem;
     
-    // Verify header version
+    // Verify header pointer
     if (!m_pHeader) {
-        std::cerr << "⚠️ Invalid header pointer" << std::endl;
+        std::cerr << "Invalid header pointer" << std::endl;
         closeSharedMemory();
         return false;
     }
     
+    // Version 0 means iRacing has the shared memory file open but hasn't
+    // initialized it yet (e.g. still loading, no session active).
+    // Don't treat this as an error - just release and retry next time.
     if (m_pHeader->ver != 2) {
-        std::cerr << "⚠️ iRacing SDK version mismatch (expected 2, got " 
-                  << m_pHeader->ver << ")" << std::endl;
-        closeSharedMemory();
+        // Only close the mapping; do NOT print an error every attempt.
+        // The main loop will silently retry on the next frame.
+        UnmapViewOfFile(m_pSharedMem);
+        m_pSharedMem = nullptr;
+        m_pHeader = nullptr;
+        CloseHandle(m_hMemMapFile);
+        m_hMemMapFile = nullptr;
         return false;
     }
     
@@ -86,10 +93,10 @@ bool IRSDKManager::openSharedMemory() {
     );
     
     if (!m_hDataValidEvent) {
-        std::cerr << "⚠️ Failed to open data valid event (non-fatal, will poll shared memory)" << std::endl;
+        std::cerr << "Failed to open data valid event (non-fatal, will poll shared memory)" << std::endl;
     }
     
-    std::cout << "✅ iRacing SDK opened successfully" << std::endl;
+    std::cout << "iRacing SDK opened successfully" << std::endl;
     std::cout << "   Version: " << m_pHeader->ver << std::endl;
     std::cout << "   Tick rate: " << m_pHeader->tickRate << " Hz" << std::endl;
     std::cout << "   Num variables: " << m_pHeader->numVars << std::endl;
@@ -245,13 +252,7 @@ const float* IRSDKManager::getFloatArray(const char* name, int& count) {
 
 const int* IRSDKManager::getIntArray(const char* name, int& count) {
     const irsdk_varHeader* header = getVarHeader(name);
-    if (!header) {
-        count = 0;
-        return nullptr;
-    }
-    
-    // Accept int, bool, and bitField types (all stored as 32-bit values in iRacing)
-    if (header->type != irsdk_int && header->type != irsdk_bool && header->type != irsdk_bitField) {
+    if (!header || (header->type != irsdk_int && header->type != irsdk_bool && header->type != irsdk_bitField)) {
         count = 0;
         return nullptr;
     }
@@ -270,7 +271,8 @@ const int* IRSDKManager::getIntArray(const char* name, int& count) {
 }
 
 const char* IRSDKManager::getSessionInfo() {
-    if (!m_pHeader) return nullptr;
+    if (!m_pHeader || !m_pSharedMem) return nullptr;
+    
     return m_pSharedMem + m_pHeader->sessionInfoOffset;
 }
 
