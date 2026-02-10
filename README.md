@@ -60,19 +60,7 @@ git clone https://github.com/tu-usuario/iracing_overlay_cpp.git
 cd iracing_overlay_cpp
 ```
 
-### 2. Descargar dependencias
-
-```bash
-cd external
-
-# GLFW
-git clone --depth 1 --branch 3.3.8 https://github.com/glfw/glfw.git
-
-# ImGui
-git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git
-```
-
-### 3. Compilar
+### 2. Compilar
 
 #### Windows (Visual Studio):
 ```bash
