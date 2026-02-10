@@ -1,5 +1,5 @@
-#ifndef YAML_PARSER_H
-#define YAML_PARSER_H
+#ifndef UTILS_YAML_PARSER_H
+#define UTILS_YAML_PARSER_H
 
 #include <string>
 #include <map>
