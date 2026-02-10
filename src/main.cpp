@@ -1,3 +1,4 @@
+#define GLFW_INCLUDE_NONE
 #include "ui/overlay_window.h"
 #include "utils/config.h"
 #include <iostream>
