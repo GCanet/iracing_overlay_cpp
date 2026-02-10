@@ -1,6 +1,7 @@
 #ifndef RELATIVE_CALC_H
 #define RELATIVE_CALC_H
 
+#include "utils/yaml_parser.h"
 #include <vector>
 #include <string>
 #include <map>
