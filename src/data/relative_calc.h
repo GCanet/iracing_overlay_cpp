@@ -13,21 +13,24 @@ namespace utils {
 namespace iracing {
 
 struct Driver {
-    int carIdx;
-    int position;
+    int carIdx = -1;
+    int position = 0;              // CarIdxPosition (oficial del SDK)
+    int relativePosition = 0;      // Posición calculada tras orden robusto (1 = líder)
+    int lap = 0;                   // CarIdxLap (vuelta actual)
+    int lapCompleted = 0;          // CarIdxLapCompleted (vueltas terminadas)
+    float lapDistPct = 0.0f;
+    float lastLapTime = 0.0f;
+    float gapToLeader = 0.0f;
+    float gapToPlayer = 0.0f;
+    bool isOnPit = false;
+    bool isPlayer = false;
     std::string carNumber;
     std::string driverName;
-    float lapDistPct;
-    float lastLapTime;
-    float gapToLeader;
-    float gapToPlayer;
-    bool isOnPit;
-    bool isPlayer;
     std::string carClass;
     std::string carBrand;
-    int iRating;
-    float safetyRating;
-    int iRatingProjection;
+    int iRating = 1500;
+    float safetyRating = 2.5f;
+    int iRatingProjection = 0;
 };
 
 class IRSDKManager;
@@ -36,41 +39,38 @@ class RelativeCalculator {
 public:
     RelativeCalculator(IRSDKManager* sdk);
     
-    // Update driver list
     void update();
     
-    // Get all drivers sorted by position
+    // Get all drivers (ya ordenados por el update)
     const std::vector<Driver>& getAllDrivers() const { return m_allDrivers; }
     
-    // Get relative (drivers near player) - FIXED: 4 ahead, 4 behind with smart adjustment
-    std::vector<Driver> getRelative(int ahead = 4, int behind = 4);
+    // Relative alrededor del jugador (smart adjustment si estás 1º o último)
+    std::vector<Driver> getRelative(int ahead = 4, int behind = 4) const;
     
-    // Get player car index
     int getPlayerCarIdx() const { return m_playerCarIdx; }
     
-    // Get race header info
     std::string getSeriesName() const;
     std::string getLapInfo() const;
     int getSOF() const;
 
 private:
     void updateSessionInfo();
-    void calculateGaps();
+    void calculateGaps(const float* f2Times, int f2Count);  // ← firma actualizada
     void calculateiRatingProjections();
     std::string getCarBrand(const std::string& carPath);
     
     IRSDKManager* m_sdk;
     std::vector<Driver> m_allDrivers;
-    int m_playerCarIdx;
-    int m_sof;
+    int m_playerCarIdx = -1;
+    int m_sof = 0;
     std::string m_seriesName;
-    int m_lapsComplete;
-    int m_totalLaps;
-    float m_sessionTime;
-    float m_sessionTimeRemain;
+    int m_lapsComplete = 0;
+    int m_totalLaps = 0;
+    float m_sessionTime = 0.0f;
+    float m_sessionTimeRemain = 0.0f;
     
-    // Session info caching
-    int m_lastSessionInfoUpdate;
+    // Caché de session string
+    int m_lastSessionInfoUpdate = -1;
     std::map<int, utils::YAMLParser::DriverInfo> m_driverInfoMap;
 };
 
