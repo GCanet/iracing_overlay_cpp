@@ -86,7 +86,7 @@ bool IRSDKManager::openSharedMemory() {
     );
     
     if (!m_hDataValidEvent) {
-        std::cerr << "⚠️ Failed to open data valid event" << std::endl;
+        std::cerr << "⚠️ Failed to open data valid event (non-fatal, will poll shared memory)" << std::endl;
     }
     
     std::cout << "✅ iRacing SDK opened successfully" << std::endl;
@@ -117,22 +117,37 @@ void IRSDKManager::closeSharedMemory() {
 }
 
 bool IRSDKManager::waitForData(int timeoutMS) {
-    if (!m_connected || !m_hDataValidEvent) return false;
+    if (!m_connected || !m_pHeader) return false;
     
-    // Wait for new data
-    DWORD result = WaitForSingleObject(m_hDataValidEvent, timeoutMS);
-    
-    if (result == WAIT_OBJECT_0) {
-        // Check if we have new data
-        if (m_pHeader && m_pHeader->status & irsdk_stConnected) {
-            int latestBuf = 0;
+    // If we have the event handle, use it for efficient waiting
+    if (m_hDataValidEvent) {
+        DWORD result = WaitForSingleObject(m_hDataValidEvent, timeoutMS);
+        
+        if (result == WAIT_OBJECT_0) {
+            if (m_pHeader->status & irsdk_stConnected) {
+                int latestBuf = 0;
+                int latestTick = 0;
+                
+                for (int i = 0; i < m_pHeader->numBuf; i++) {
+                    if (m_pHeader->varBuf[i].tickCount > latestTick) {
+                        latestTick = m_pHeader->varBuf[i].tickCount;
+                        latestBuf = i;
+                    }
+                }
+                
+                if (latestTick != m_lastTickCount) {
+                    m_lastTickCount = latestTick;
+                    return true;
+                }
+            }
+        }
+    } else {
+        // No event handle - poll shared memory directly
+        if (m_pHeader->status & irsdk_stConnected) {
             int latestTick = 0;
-            
-            // Find latest buffer
             for (int i = 0; i < m_pHeader->numBuf; i++) {
                 if (m_pHeader->varBuf[i].tickCount > latestTick) {
                     latestTick = m_pHeader->varBuf[i].tickCount;
-                    latestBuf = i;
                 }
             }
             
@@ -163,7 +178,10 @@ const irsdk_varHeader* IRSDKManager::getVarHeader(const char* name) {
 
 float IRSDKManager::getFloat(const char* name, float defaultValue) {
     const irsdk_varHeader* header = getVarHeader(name);
-    if (!header || header->type != irsdk_float) return defaultValue;
+    if (!header) return defaultValue;
+    
+    // Accept float and double types
+    if (header->type != irsdk_float && header->type != irsdk_double) return defaultValue;
     
     // Get latest buffer
     int latestBuf = 0;
@@ -174,12 +192,21 @@ float IRSDKManager::getFloat(const char* name, float defaultValue) {
     }
     
     const char* data = m_pSharedMem + m_pHeader->varBuf[latestBuf].bufOffset;
+    
+    if (header->type == irsdk_double) {
+        return static_cast<float>(*(const double*)(data + header->offset));
+    }
     return *(const float*)(data + header->offset);
 }
 
 int IRSDKManager::getInt(const char* name, int defaultValue) {
     const irsdk_varHeader* header = getVarHeader(name);
-    if (!header || header->type != irsdk_int) return defaultValue;
+    if (!header) return defaultValue;
+    
+    // Accept int, bool, and bitField types (all stored as 32-bit integers)
+    if (header->type != irsdk_int && header->type != irsdk_bool && header->type != irsdk_bitField) {
+        return defaultValue;
+    }
     
     int latestBuf = 0;
     for (int i = 1; i < m_pHeader->numBuf; i++) {
@@ -218,7 +245,13 @@ const float* IRSDKManager::getFloatArray(const char* name, int& count) {
 
 const int* IRSDKManager::getIntArray(const char* name, int& count) {
     const irsdk_varHeader* header = getVarHeader(name);
-    if (!header || header->type != irsdk_int) {
+    if (!header) {
+        count = 0;
+        return nullptr;
+    }
+    
+    // Accept int, bool, and bitField types (all stored as 32-bit values in iRacing)
+    if (header->type != irsdk_int && header->type != irsdk_bool && header->type != irsdk_bitField) {
         count = 0;
         return nullptr;
     }
