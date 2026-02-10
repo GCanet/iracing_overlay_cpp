@@ -195,20 +195,6 @@ assets/car_brands/
 └── mazda.png           
 ```
 
-**Nota**: Si no existen los assets, el overlay funcionará igual pero mostrará `[marca]` en texto.
-
-## ⚠️ Limitaciones conocidas
-
-1. **Car logos**: Necesitas los PNG manualmente (no incluidos por copyright)
-2. **Car class**: Aún no parseado del SessionInfo (muestra "GT3" hardcoded)
-3. **Config system**: No implementado (usa defaults)
-
-## 🚀 Roadmap
-
-- [ ] Parsear car class del SessionInfo
-- [ ] Sistema de configuración persistente (INI/JSON)
-- [ ] Modo "ghost" (click-through)
-
 ## ⚠️ Disclaimer
 
 Este proyecto usa únicamente la API oficial de iRacing SDK.
