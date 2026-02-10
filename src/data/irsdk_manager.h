@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "irsdk/irsdk_defines.h"
+#include "irsdk/irsdk_defines.h"   // asumiendo que tienes este header con las definiciones oficiales
 
 namespace iracing {
 
@@ -18,42 +18,41 @@ public:
     bool startup();
     void shutdown();
     bool isConnected() const;
-    
-    // Check if SDK session is actively providing data
-    // (shared memory open AND irsdk_stConnected flag set)
     bool isSessionActive() const;
-    
-    // Data access
+
+    // Data wait & update
     bool waitForData(int timeoutMS = 16);
-    
-    // Get values
-    template<typename T>
-    T getVar(const char* name, T defaultValue = T());
-    
-    float getFloat(const char* name, float defaultValue = 0.0f);
-    int getInt(const char* name, int defaultValue = 0);
-    bool getBool(const char* name, bool defaultValue = false);
-    
+
+    // Get values (const donde posible)
+    float getFloat(const char* name, float defaultValue = 0.0f) const;
+    int getInt(const char* name, int defaultValue = 0) const;
+    bool getBool(const char* name, bool defaultValue = false) const;
+
     // Array access
-    const float* getFloatArray(const char* name, int& count);
-    const int* getIntArray(const char* name, int& count);
-    
+    const float* getFloatArray(const char* name, int& count) const;
+    const int* getIntArray(const char* name, int& count) const;
+
     // Session info
-    const char* getSessionInfo();
+    const char* getSessionInfo() const;
     int getSessionInfoUpdate() const;
 
 private:
     bool openSharedMemory();
     void closeSharedMemory();
-    const irsdk_varHeader* getVarHeader(const char* name);
-    
-    HANDLE m_hMemMapFile;
-    HANDLE m_hDataValidEvent;
-    const irsdk_header* m_pHeader;
-    const char* m_pSharedMem;
-    bool m_connected;
-    int m_lastTickCount;
-    int m_sessionInfoUpdate;
+    void updateLatestBufferIndex();          // ← nuevo método
+    int getLatestTickCount() const;          // ← helper
+    const char* getDataPtr() const;          // ← puntero al buffer latest
+
+    const irsdk_varHeader* getVarHeader(const char* name) const;
+
+    HANDLE m_hMemMapFile = nullptr;
+    HANDLE m_hDataValidEvent = nullptr;
+    const irsdk_header* m_pHeader = nullptr;
+    const char* m_pSharedMem = nullptr;
+    bool m_connected = false;
+    int m_lastTickCount = -1;
+    int m_latestBufIndex = -1;               // ← NUEVO: cache del buffer más reciente
+    int m_sessionInfoUpdate = 0;
 };
 
 } // namespace iracing
