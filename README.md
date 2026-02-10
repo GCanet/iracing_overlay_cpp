@@ -2,22 +2,6 @@
 
 **A professional, transparent overlay for iRacing with real-time telemetry and race position tracking.**
 
-## ✨ New Features (v1.1)
-
-### 🔒 True Overlay Mode
-- **Borderless, always-on-top window** - Stays above iRacing
-- **Click-through mode** - Press `L` to lock widgets (mouse clicks pass through to game)
-- **Persistent window positions** - Widgets remember where you put them
-- **Per-widget transparency** - Customize opacity for each widget
-
-### 💾 Configuration System
-- **Auto-save on exit** - All positions and settings saved to `config.ini`
-- **Customizable:**
-  - Window positions and sizes
-  - Transparency levels (global and per-widget)
-  - Font scaling
-  - Click-through state
-
 ---
 
 ## 🎯 Features
@@ -78,7 +62,6 @@
 | **Q** | Quit overlay |
 | **L** | Toggle Lock (enable/disable click-through) |
 | **Drag** | Move widgets (when unlocked) |
-| **Right-click** | Widget context menu (future) |
 
 ---
 
@@ -136,23 +119,6 @@ iRacingOverlay.exe
 2. Drag widgets to your preferred positions
 3. Press **L** to lock (enable click-through)
 4. Positions auto-save when you quit
-
-### Customization
-
-Edit `config.ini` to customize:
-
-```ini
-[Global]
-FontScale=1.0          # 1.2 for larger text
-ClickThrough=false     # true to start locked
-GlobalAlpha=0.7        # 0.0-1.0 transparency
-
-[Relative]
-Alpha=0.6              # Individual widget transparency
-
-[Telemetry]
-Alpha=0.7
-```
 
 ---
 
@@ -247,23 +213,6 @@ This project uses only the official iRacing SDK API.
 Does not modify game files or use memory injection.
 **100% allowed** according to iRacing terms of service.
 
----
-
-## 📝 Changelog
-
-### v1.1 (Current)
-- ✅ True overlay mode (borderless, always-on-top)
-- ✅ Click-through toggle (L key)
-- ✅ Config persistence (positions, sizes, transparency)
-- ✅ Per-widget configuration
-- ✅ Auto-save on exit
-
-### v1.0
-- ✅ Relative widget with smart positioning
-- ✅ Telemetry graphs (throttle/brake)
-- ✅ Real iRating and projections
-- ✅ SOF calculation
-- ✅ Safety Rating display
 
 ---
 
@@ -287,7 +236,3 @@ Contributions welcome! Please:
 - iRacing SDK by iRacing.com
 - Dear ImGui by Omar Cornut
 - GLFW by Marcus Geelnard & Camilla Löwy
-
----
-
-**Made with ❤️ for the iRacing community**
