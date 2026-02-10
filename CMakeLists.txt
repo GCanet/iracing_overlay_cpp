@@ -5,10 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# MSVC runtime - set BEFORE any targets are created
-# Use static CRT to avoid runtime DLL dependencies
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 # Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -90,8 +86,10 @@ set(APP_SOURCES
 add_executable(iRacingOverlay ${APP_SOURCES})
 
 set_target_properties(iRacingOverlay PROPERTIES
-    WIN32_EXECUTABLE FALSE   # forces console subsystem (/SUBSYSTEM:CONSOLE)
+    WIN32_EXECUTABLE FALSE
 )
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 target_include_directories(iRacingOverlay PRIVATE
     ${CMAKE_SOURCE_DIR}/include
@@ -104,11 +102,6 @@ target_link_libraries(iRacingOverlay PRIVATE
     glad
     opengl32
 )
-
-# Suppress LNK4098 warning about conflicting default libraries (LIBCMT vs MSVCRT)
-if(MSVC)
-    target_link_options(iRacingOverlay PRIVATE /NODEFAULTLIB:LIBCMT)
-endif()
 
 # Copy assets
 add_custom_command(TARGET iRacingOverlay POST_BUILD
