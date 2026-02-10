@@ -74,31 +74,7 @@ git clone --depth 1 --branch 3.3.8 https://github.com/glfw/glfw.git
 git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git
 ```
 
-### 3. Descargar GLAD
-
-1. Ve a: https://glad.dav1d.de/
-2. Configuración:
-   - Profile: **Core**
-   - API gl: **Version 3.3**
-3. Click **GENERATE**
-4. Descarga y extrae en `external/glad/`
-
-Estructura final:
-```
-external/
-├── glfw/
-├── imgui/
-└── glad/
-    ├── include/
-    │   ├── glad/
-    │   │   └── glad.h
-    │   └── KHR/
-    │       └── khrplatform.h
-    └── src/
-        └── glad.c
-```
-
-### 4. Compilar
+### 3. Compilar
 
 #### Windows (Visual Studio):
 ```bash
@@ -121,7 +97,7 @@ O simplemente ejecuta:
 build.bat
 ```
 
-### 5. Ejecutar
+### 4. Ejecutar
 
 ```bash
 cd build\bin\Release
@@ -165,13 +141,6 @@ iracing_overlay_cpp/
 ├── build.bat                 # Script compilación
 └── README.md                 # Esta documentación
 ```
-
-## 🔧 Dependencias
-
-- **Dear ImGui** 1.90.1 - UI framework
-- **GLFW** 3.3.8 - Window management
-- **GLAD** - OpenGL loader
-- **iRacing SDK** - Official telemetry API
 
 ## 🎨 Assets Opcionales
 
