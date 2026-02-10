@@ -1,6 +1,7 @@
 #include "data/relative_calc.h"
 #include "data/irsdk_manager.h"
 #include "data/irating_calc.h"
+#include "utils/yaml_parser.h"
 #include <algorithm>
 #include <map>
 #include <sstream>
@@ -16,6 +17,7 @@ RelativeCalculator::RelativeCalculator(IRSDKManager* sdk)
     , m_totalLaps(0)
     , m_sessionTime(0.0f)
     , m_sessionTimeRemain(0.0f)
+    , m_lastSessionInfoUpdate(-1)
 {
 }
 
@@ -23,6 +25,13 @@ void RelativeCalculator::update() {
     if (!m_sdk || !m_sdk->isConnected()) {
         m_allDrivers.clear();
         return;
+    }
+    
+    // Check if we need to update session info
+    int currentUpdate = m_sdk->getSessionInfoUpdate();
+    if (currentUpdate != m_lastSessionInfoUpdate) {
+        updateSessionInfo();
+        m_lastSessionInfoUpdate = currentUpdate;
     }
     
     m_allDrivers.clear();
@@ -49,6 +58,9 @@ void RelativeCalculator::update() {
     int surfaceCount = 0;
     const int* trackSurface = m_sdk->getIntArray("CarIdxTrackSurface", surfaceCount);
     
+    int classCount = 0;
+    const int* carClassID = m_sdk->getIntArray("CarIdxClassPosition", classCount);
+    
     if (!positions || !lapDistPct) return;
     
     // Collect all iRatings for SOF calculation
@@ -71,13 +83,24 @@ void RelativeCalculator::update() {
         driver.gapToPlayer = 0.0f;
         driver.iRatingProjection = 0;
         
-        // These would come from session info parsing - for now, placeholder
-        driver.carNumber = std::to_string(i);
-        driver.driverName = "Driver " + std::to_string(i);
-        driver.carClass = "GT3";
-        driver.carBrand = "unknown";
-        driver.iRating = 1500 + (i * 50); // Placeholder
-        driver.safetyRating = 2.5f + (i * 0.1f); // Placeholder
+        // Get driver info from session data
+        auto it = m_driverInfoMap.find(i);
+        if (it != m_driverInfoMap.end()) {
+            driver.carNumber = it->second.carNumber;
+            driver.driverName = it->second.userName;
+            driver.iRating = it->second.iRating;
+            driver.safetyRating = static_cast<float>(it->second.licenseLevel) / 4.0f;
+            driver.carBrand = getCarBrand(it->second.carPath);
+            driver.carClass = "GT3"; // TODO: Parse from session info
+        } else {
+            // Fallback if not in session info
+            driver.carNumber = std::to_string(i);
+            driver.driverName = "Driver " + std::to_string(i);
+            driver.iRating = 1500;
+            driver.safetyRating = 2.5f;
+            driver.carBrand = "unknown";
+            driver.carClass = "Unknown";
+        }
         
         allIRatings.push_back(driver.iRating);
         m_allDrivers.push_back(driver);
@@ -97,6 +120,25 @@ void RelativeCalculator::update() {
     // Calculate gaps and projections
     calculateGaps();
     calculateiRatingProjections();
+}
+
+void RelativeCalculator::updateSessionInfo() {
+    const char* yaml = m_sdk->getSessionInfo();
+    if (!yaml) return;
+    
+    utils::YAMLParser::SessionInfo info = utils::YAMLParser::parse(yaml);
+    
+    // Update session data
+    m_seriesName = info.seriesName;
+    m_totalLaps = info.sessionLaps;
+    
+    // Update driver info map
+    m_driverInfoMap.clear();
+    for (const auto& driverInfo : info.drivers) {
+        if (driverInfo.carIdx >= 0) {
+            m_driverInfoMap[driverInfo.carIdx] = driverInfo;
+        }
+    }
 }
 
 void RelativeCalculator::calculateGaps() {
@@ -162,22 +204,21 @@ std::vector<Driver> RelativeCalculator::getRelative(int ahead, int behind) {
     
     if (playerPos < 0) return relative;
     
-    // NUEVA LÓGICA: Siempre intentar mostrar (ahead + 1 + behind) coches
-    const int targetTotal = ahead + 1 + behind; // Ejemplo: 4 + 1 + 4 = 9
+    // Siempre intentar mostrar (ahead + 1 + behind) coches total
     const int totalDrivers = static_cast<int>(m_allDrivers.size());
     
     // Calcular rango ideal
     int idealStart = playerPos - behind;
     int idealEnd = playerPos + ahead + 1;
     
-    // Ajustar si nos salimos por arriba (ej: vas 1º)
+    // Ajustar si nos salimos por arriba (vas en primeras posiciones)
     if (idealStart < 0) {
         int deficit = -idealStart;
         idealStart = 0;
         idealEnd = std::min(totalDrivers, idealEnd + deficit);
     }
     
-    // Ajustar si nos salimos por abajo (ej: vas último)
+    // Ajustar si nos salimos por abajo (vas en últimas posiciones)
     if (idealEnd > totalDrivers) {
         int excess = idealEnd - totalDrivers;
         idealEnd = totalDrivers;
@@ -193,7 +234,6 @@ std::vector<Driver> RelativeCalculator::getRelative(int ahead, int behind) {
 }
 
 std::string RelativeCalculator::getSeriesName() const {
-    // TODO: Parse from session info YAML
     return m_seriesName;
 }
 
@@ -230,8 +270,8 @@ std::string RelativeCalculator::getCarBrand(const std::string& carPath) {
         {"mclaren", "mclaren"},
         {"ford", "ford"},
         {"chevrolet", "chevrolet"},
-        {"toyota", "toyota"}, 
-        {"mazda", "mazda"}   
+        {"toyota", "toyota"},
+        {"mazda", "mazda"}
     };
     
     std::string lower = carPath;

@@ -23,6 +23,7 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/external/imgui
     ${CMAKE_SOURCE_DIR}/external/imgui/backends
     ${CMAKE_SOURCE_DIR}/external/glfw/include
@@ -40,7 +41,7 @@ set(IMGUI_SOURCES
     external/imgui/backends/imgui_impl_opengl3.cpp
 )
 
-# GLFW (we'll add it as submodule or download)
+# GLFW
 add_subdirectory(external/glfw EXCLUDE_FROM_ALL)
 
 # GLAD
@@ -57,6 +58,7 @@ set(APP_SOURCES
     src/data/relative_calc.cpp
     src/data/irating_calc.cpp
     src/utils/config.cpp
+    src/utils/yaml_parser.cpp
 )
 
 # Create executable

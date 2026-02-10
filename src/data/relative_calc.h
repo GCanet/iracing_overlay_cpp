@@ -3,6 +3,11 @@
 
 #include <vector>
 #include <string>
+#include <map>
+
+namespace utils {
+    struct YAMLParser;
+}
 
 namespace iracing {
 
@@ -21,7 +26,7 @@ struct Driver {
     std::string carBrand;
     int iRating;
     float safetyRating;
-    int iRatingProjection; // NEW: projected iRating gain/loss
+    int iRatingProjection;
 };
 
 class IRSDKManager;
@@ -36,18 +41,19 @@ public:
     // Get all drivers sorted by position
     const std::vector<Driver>& getAllDrivers() const { return m_allDrivers; }
     
-    // Get relative (drivers near player) - FIXED: 4 ahead, 4 behind
+    // Get relative (drivers near player) - FIXED: 4 ahead, 4 behind with smart adjustment
     std::vector<Driver> getRelative(int ahead = 4, int behind = 4);
     
     // Get player car index
     int getPlayerCarIdx() const { return m_playerCarIdx; }
     
-    // NEW: Get race header info
+    // Get race header info
     std::string getSeriesName() const;
     std::string getLapInfo() const;
     int getSOF() const;
 
 private:
+    void updateSessionInfo();
     void calculateGaps();
     void calculateiRatingProjections();
     std::string getCarBrand(const std::string& carPath);
@@ -61,6 +67,10 @@ private:
     int m_totalLaps;
     float m_sessionTime;
     float m_sessionTimeRemain;
+    
+    // Session info caching
+    int m_lastSessionInfoUpdate;
+    std::map<int, utils::YAMLParser::DriverInfo> m_driverInfoMap;
 };
 
 } // namespace iracing
