@@ -3,35 +3,34 @@
 
 #include <deque>
 
-// Forward declarations
-struct ImDrawList;
-struct ImVec2;
-
 namespace iracing {
     class IRSDKManager;
 }
 
 namespace ui {
+    class OverlayWindow;  // forward declaration
 
-class TelemetryWidget {
-public:
-    TelemetryWidget();
+    class TelemetryWidget {
+    public:
+        // Constructor ahora recibe puntero al overlay (puede ser nullptr si no se usa)
+        TelemetryWidget(OverlayWindow* overlay = nullptr);
 
-    // Render ahora recibe editMode para controlar drag y menú contextual
-    void render(iracing::IRSDKManager* sdk, bool editMode = false);
+        void render(iracing::IRSDKManager* sdk, bool editMode = false);
 
-private:
-    void updateHistory(float throttle, float brake);
+    private:
+        void updateHistory(float throttle, float brake);
 
-    std::deque<float> m_throttleHistory;
-    std::deque<float> m_brakeHistory;
+        std::deque<float> m_throttleHistory;
+        std::deque<float> m_brakeHistory;
 
-    float m_scale = 1.0f;  // Escala del widget (ajustable desde menú contextual)
+        float m_scale = 1.0f;
 
-    static constexpr size_t MAX_HISTORY = 180;     // ~3 segundos a 60 Hz
-    static constexpr float GRAPH_WIDTH = 255.0f;   // Tu valor original
-    static constexpr float GRAPH_HEIGHT = 60.0f;
-};
+        OverlayWindow* m_overlay;  // ← puntero para acceder a editMode y alpha
+
+        static constexpr size_t MAX_HISTORY = 180;
+        static constexpr float GRAPH_WIDTH = 255.0f;
+        static constexpr float GRAPH_HEIGHT = 60.0f;
+    };
 
 } // namespace ui
 
