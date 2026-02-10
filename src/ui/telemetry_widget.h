@@ -16,19 +16,20 @@ namespace ui {
 class TelemetryWidget {
 public:
     TelemetryWidget();
-    
-    void render(iracing::IRSDKManager* sdk);
+
+    // Render ahora recibe editMode para controlar drag y menú contextual
+    void render(iracing::IRSDKManager* sdk, bool editMode = false);
 
 private:
     void updateHistory(float throttle, float brake);
-    void renderGraph(ImDrawList* draw_list, ImVec2 canvas_pos, 
-                     const char* label, const std::deque<float>& data, float color[3]);
-    
+
     std::deque<float> m_throttleHistory;
     std::deque<float> m_brakeHistory;
-    
-    static constexpr int MAX_HISTORY = 180; // 3 seconds at 60Hz
-    static constexpr float GRAPH_WIDTH = 255.0f;  // 15% smaller than 300
+
+    float m_scale = 1.0f;  // Escala del widget (ajustable desde menú contextual)
+
+    static constexpr size_t MAX_HISTORY = 180;     // ~3 segundos a 60 Hz
+    static constexpr float GRAPH_WIDTH = 255.0f;   // Tu valor original
     static constexpr float GRAPH_HEIGHT = 60.0f;
 };
 
