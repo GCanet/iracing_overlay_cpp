@@ -83,7 +83,7 @@ O simplemente ejecuta:
 build.bat
 ```
 
-### 4. Ejecutar
+### 3. Ejecutar
 
 ```bash
 cd build\bin\Release
