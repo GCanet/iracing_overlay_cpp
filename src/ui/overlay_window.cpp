@@ -96,8 +96,8 @@ bool OverlayWindow::initialize() {
     m_sdk = std::make_unique<iracing::IRSDKManager>();
     m_relative = std::make_unique<iracing::RelativeCalculator>(m_sdk.get());
 
-    m_relativeWidget = std::make_unique<RelativeWidget>();
-    m_telemetryWidget = std::make_unique<TelemetryWidget>();
+    m_relativeWidget  = std::make_unique<RelativeWidget>(this);
+    m_telemetryWidget = std::make_unique<TelemetryWidget>(this);
 
     // Frames transparentes iniciales
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
