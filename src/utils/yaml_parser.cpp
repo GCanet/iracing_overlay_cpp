@@ -176,6 +176,16 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
                     else if (trimmed.find("CarPath:") != std::string::npos) {
                         currentDriver.carPath = extractValue(trimmed);
                     }
+                    // ── Add the car class checks here, at the same level ──
+                    else if (trimmed.find("CarClassShortName:") != std::string::npos) {
+                        currentDriver.carClassShortName = extractValue(trimmed);
+                    }
+                    else if (trimmed.find("CarClass:") != std::string::npos) {
+                        // fallback only if ShortName wasn't found earlier
+                        if (currentDriver.carClassShortName.empty()) {
+                            currentDriver.carClassShortName = extractValue(trimmed);
+                        }
+                    }
                 }
             }
         }
