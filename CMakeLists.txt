@@ -86,6 +86,12 @@ set(APP_SOURCES
 
 add_executable(iRacingOverlay ${APP_SOURCES})
 
+set_target_properties(iRacingOverlay PROPERTIES
+    WIN32_EXECUTABLE FALSE   # ← forces console subsystem (/SUBSYSTEM:CONSOLE)
+)
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")  # or "MultiThreadedDLL" if you prefer dynamic CRT
+
 target_include_directories(iRacingOverlay PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
