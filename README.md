@@ -52,7 +52,6 @@ Overlay profesional de alto rendimiento para iRacing con consumo mínimo de recu
 
 - **Q**: Salir
 - **Drag**: Mover ventanas
-- **Right-click**: Configurar widgets (futuro)
 
 ## 📦 Compilación
 
@@ -136,35 +135,6 @@ iRacingOverlay.exe
 3. **Entra a una sesión** (práctica, carrera, etc.)
 4. El overlay se conectará automáticamente y mostrará datos reales
 
-## ✨ Nuevas características (v1.1)
-
-### ✅ Parsing real de SessionInfo YAML
-- Nombres de pilotos reales
-- iRatings reales
-- Safety Ratings reales
-- Números de coche reales
-- Nombre de la serie
-- Detección de marcas de coche
-
-### ✅ Sistema inteligente de visualización relativa
-- Ajuste automático cuando vas en primeras posiciones
-- Ajuste automático cuando vas en últimas posiciones
-- Siempre muestra el máximo de información disponible
-
-### ✅ Cálculo real de SOF
-- Basado en iRatings reales de todos los pilotos
-- Actualización en tiempo real
-
-### ✅ Proyección de iRating precisa
-- Algoritmo ELO adaptado a iRacing
-- Muestra ganancia/pérdida esperada según posición actual
-
-## 📊 Actualización de datos
-
-- **Telemetría**: 60 Hz
-- **Relative**: ~60 Hz
-- **SessionInfo**: Solo cuando iRacing lo actualiza (cambio de sesión, nuevos pilotos, etc.)
-
 ## 🗂️ Estructura del Proyecto
 
 ```
@@ -180,8 +150,7 @@ iracing_overlay_cpp/
 │   │   ├── relative_calc.*   # Cálculos relativo + parsing
 │   │   └── irating_calc.*    # Proyección iRating
 │   └── utils/
-│       ├── config.*          # Configuración (placeholder)
-│       └── yaml_parser.*     # Parser SessionInfo ✨ NUEVO
+│       └── yaml_parser.*     # Parser SessionInfo 
 ├── include/
 │   └── irsdk/
 │       └── irsdk_defines.h   # Headers iRacing SDK
@@ -191,7 +160,7 @@ iracing_overlay_cpp/
 │   └── glad/
 ├── assets/                   # Assets opcionales
 │   └── car_brands/           # Logos PNG
-├── .gitignore                # ✨ NUEVO
+├── .gitignore                # 
 ├── CMakeLists.txt            # Build system actualizado
 ├── build.bat                 # Script compilación
 └── README.md                 # Esta documentación
@@ -222,35 +191,11 @@ assets/car_brands/
 ├── mclaren.png
 ├── ford.png
 ├── chevrolet.png
-├── toyota.png          ✨ NUEVO
-└── mazda.png           ✨ NUEVO
+├── toyota.png          
+└── mazda.png           
 ```
 
 **Nota**: Si no existen los assets, el overlay funcionará igual pero mostrará `[marca]` en texto.
-
-## 🐛 Cambios en v1.1
-
-### Bugs corregidos:
-1. ✅ **Fix getRelative()**: Ahora muestra correctamente cuando vas P1-P3
-2. ✅ **Datos reales**: Ya no son placeholders, lee SessionInfo YAML
-3. ✅ **Toyota y Mazda**: Añadidos al mapa de marcas
-
-### Mejoras:
-1. ✅ Parser YAML propio (no necesita librerías externas)
-2. ✅ Caché de SessionInfo (solo parsea cuando cambia)
-3. ✅ SOF calculado con iRatings reales
-4. ✅ .gitignore añadido
-
-## 📝 Notas sobre iRacing SDK
-
-### SessionInfo YAML
-iRacing provee información de sesión en formato YAML a través de `getSessionInfo()`. El parser incluido extrae:
-- `WeekendInfo`: Nombre de serie, track
-- `DriverInfo`: Lista de pilotos con iRating, License, nombres, números de coche
-- `SessionInfo`: Laps, tiempo de sesión
-
-### Variables telemetría
-Acceso directo vía memoria compartida a ~300 variables en tiempo real.
 
 ## ⚠️ Limitaciones conocidas
 
@@ -260,11 +205,8 @@ Acceso directo vía memoria compartida a ~300 variables en tiempo real.
 
 ## 🚀 Roadmap
 
-- [ ] Cargar texturas de logos de PNG
 - [ ] Parsear car class del SessionInfo
 - [ ] Sistema de configuración persistente (INI/JSON)
-- [ ] Widget de inputs (steering, throttle, brake)
-- [ ] Widget de fuel/tire calculator
 - [ ] Modo "ghost" (click-through)
 
 ## ⚠️ Disclaimer
@@ -276,7 +218,3 @@ No modifica archivos del juego ni usa memory injection.
 ## 📜 Licencia
 
 MIT License - Libre para uso personal y comercial
-
----
-
-**Made with ❤️ for the iRacing community**
