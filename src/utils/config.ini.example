@@ -1,0 +1,43 @@
+; iRacing Overlay Configuration
+; This file is auto-generated when you exit the overlay
+; You can edit values manually if needed
+
+[Global]
+; Font scaling (1.0 = normal, 1.2 = 20% larger, etc.)
+FontScale=1.0
+
+; Click-through mode (true = locked, mouse passes through)
+ClickThrough=false
+
+; Global window transparency (0.0 = invisible, 1.0 = opaque)
+GlobalAlpha=0.7
+
+[Relative]
+; Window position (-1 = use default first time)
+PosX=-1
+PosY=-1
+
+; Window size (-1 = auto-size)
+Width=-1
+Height=-1
+
+; Window transparency for this widget
+Alpha=0.6
+
+; Visibility toggle
+Visible=true
+
+[Telemetry]
+; Window position (-1 = use default first time)
+PosX=-1
+PosY=-1
+
+; Window size (-1 = auto-size)
+Width=-1
+Height=-1
+
+; Window transparency for this widget
+Alpha=0.7
+
+; Visibility toggle
+Visible=true
