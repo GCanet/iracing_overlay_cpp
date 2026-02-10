@@ -21,36 +21,28 @@ if(WIN32)
 endif()
 
 # =============================================================================
-# FetchContent - Modern dependency management (no external/ folders needed)
+# FetchContent - GLFW & ImGui (no external/ folders)
 # =============================================================================
 include(FetchContent)
 
-# ────────────────────────────────────────────────
 # GLFW
-# ────────────────────────────────────────────────
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG        3.4
 )
-
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
-
 FetchContent_MakeAvailable(glfw)
 
-# ────────────────────────────────────────────────
-# Dear ImGui (v1.92.5 - latest stable as of Feb 2026)
-# ────────────────────────────────────────────────
+# ImGui
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        v1.92.5
-    # GIT_TAG      docking      # ← Uncomment this line if you want docking + multi-viewport support
+    GIT_TAG        v1.92.5  # or docking branch if needed: GIT_TAG docking
 )
-
 FetchContent_MakeAvailable(imgui)
 
 add_library(imgui STATIC
@@ -58,9 +50,8 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    # ${imgui_SOURCE_DIR}/imgui_demo.cpp   # ← Uncomment if you want the demo window for testing
+    # ${imgui_SOURCE_DIR}/imgui_demo.cpp   # optional
 
-    # Backends
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
@@ -69,31 +60,18 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
 )
-
 target_link_libraries(imgui PUBLIC glfw)
 target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
-# ────────────────────────────────────────────────
-# GLAD (v2 with proper CMake support - no Python needed)
-# ────────────────────────────────────────────────
-FetchContent_Declare(
-    glad
-    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-    GIT_TAG        v2.0.8
-    SOURCE_SUBDIR  cmake          # Important for GLAD 2
-)
-
-FetchContent_MakeAvailable(glad)
-
-glad_add_library(glad_gl_core_46 STATIC REPRODUCIBLE
-    API gl:core=4.6
-)
+# =============================================================================
+# GLAD - Pre-generated static lib (no Python/FetchContent needed)
+# =============================================================================
+add_library(glad STATIC src/glad.c)  # <-- assumes glad.c is in src/; change path if you put it elsewhere
+target_include_directories(glad PUBLIC include)  # points to include/glad/glad.h
 
 # =============================================================================
-# Main application
+# Main app
 # =============================================================================
-
-# Main sources (no more manual ImGui sources)
 set(APP_SOURCES
     src/main.cpp
     src/ui/overlay_window.cpp
@@ -108,27 +86,25 @@ set(APP_SOURCES
 
 add_executable(iRacingOverlay ${APP_SOURCES})
 
-# Include paths (only your own code)
 target_include_directories(iRacingOverlay PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
 )
 
-# Linking
 target_link_libraries(iRacingOverlay PRIVATE
     glfw
     imgui
-    glad_gl_core_46
+    glad
     opengl32
 )
 
-# Copy assets after build
+# Copy assets
 add_custom_command(TARGET iRacingOverlay POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/assets
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets
 )
 
-# Install rules
+# Install
 install(TARGETS iRacingOverlay RUNTIME DESTINATION bin)
 install(DIRECTORY assets DESTINATION bin)
