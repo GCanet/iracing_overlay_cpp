@@ -2,12 +2,11 @@
 #define CONFIG_H
 
 #include <string>
-#include <map>
 
 namespace utils {
 
 struct WidgetConfig {
-    float posX = -1.0f;  // -1 = first use
+    float posX = -1.0f;  // -1 = primera vez (auto-centrar)
     float posY = -1.0f;
     float width = -1.0f;
     float height = -1.0f;
@@ -20,7 +19,7 @@ public:
     static void load(const std::string& filename = "config.ini");
     static void save(const std::string& filename = "config.ini");
     
-    // Widget configs
+    // Widget configs - acceso directo a las estructuras
     static WidgetConfig& getRelativeConfig();
     static WidgetConfig& getTelemetryConfig();
     
@@ -38,6 +37,7 @@ private:
     static std::string trim(const std::string& str);
     static std::string extractValue(const std::string& line);
     
+    // Variables estáticas
     static WidgetConfig s_relativeConfig;
     static WidgetConfig s_telemetryConfig;
     static float s_fontScale;
