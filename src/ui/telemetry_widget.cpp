@@ -19,21 +19,26 @@ TelemetryWidget::TelemetryWidget(OverlayWindow* overlay)
 }
 
 void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
-    if (!sdk || !sdk->isSessionActive()) return;
+    // FIXED: Don't check isSessionActive - render whenever SDK exists
+    // This allows the widget to be visible even when waiting for session
+    if (!sdk) return;
 
-    // Leer inputs actuales
-    m_currentThrottle = sdk->getFloat("Throttle", 0.0f);
-    m_currentBrake = sdk->getFloat("Brake", 0.0f);
-    // Clutch: invertir (0=presionado, 1=suelto en SDK → invertimos para visual)
-    float clutchRaw = sdk->getFloat("Clutch", 0.0f);
-    m_currentClutch = 1.0f - clutchRaw;
-    m_currentSteer = sdk->getFloat("SteeringWheelAngle", 0.0f);
-    m_absActive = sdk->getBool("BrakeABSactive", false);
-    m_currentGear = sdk->getInt("Gear", 0);
-    m_currentSpeed = sdk->getFloat("Speed", 0.0f);
-    
-    updateTachometer(sdk);
-    updateHistory(m_currentThrottle, m_currentBrake, m_currentClutch, m_currentSteer);
+    // Only update data if session is active
+    if (sdk->isSessionActive()) {
+        // Leer inputs actuales
+        m_currentThrottle = sdk->getFloat("Throttle", 0.0f);
+        m_currentBrake = sdk->getFloat("Brake", 0.0f);
+        // Clutch: invertir (0=presionado, 1=suelto en SDK → invertimos para visual)
+        float clutchRaw = sdk->getFloat("Clutch", 0.0f);
+        m_currentClutch = 1.0f - clutchRaw;
+        m_currentSteer = sdk->getFloat("SteeringWheelAngle", 0.0f);
+        m_absActive = sdk->getBool("BrakeABSactive", false);
+        m_currentGear = sdk->getInt("Gear", 0);
+        m_currentSpeed = sdk->getFloat("Speed", 0.0f);
+        
+        updateTachometer(sdk);
+        updateHistory(m_currentThrottle, m_currentBrake, m_currentClutch, m_currentSteer);
+    }
 
     auto& config = utils::Config::getTelemetryConfig();
 
@@ -169,7 +174,8 @@ void TelemetryWidget::renderInputTrace(float width, float height) {
     }
     
     if (m_showBrake) {
-        ImU32 brakeColor = m_absActive && m_showABS ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 0, 0, 255);
+        ImU32 brakeColor = m_absActive && m_showABS ?
+            IM_COL32(255, 255, 0, 255) : IM_COL32(255, 0, 0, 255);
         drawTrace(m_brakeHistory, brakeColor, m_strokeWidth);
     }
     
@@ -242,7 +248,8 @@ void TelemetryWidget::renderInputBars(float width, float height) {
         drawBar(m_currentClutch, IM_COL32(100, 150, 255, 255), "CLU");
     }
     if (m_showBrake) {
-        ImU32 brakeColor = m_absActive && m_showABS ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 0, 0, 255);
+        ImU32 brakeColor = m_absActive && m_showABS ?
+            IM_COL32(255, 255, 0, 255) : IM_COL32(255, 0, 0, 255);
         drawBar(m_currentBrake, brakeColor, "BRK", m_absActive && m_showABS);
     }
     if (m_showThrottle) {
@@ -271,14 +278,14 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
         snprintf(gearText, sizeof(gearText), "%d", m_currentGear);
     }
     
-    ImGui::PushFont(ImGui::GetFont()); // TODO: usar font más grande si está disponible
+    ImGui::PushFont(ImGui::GetFont());
     ImVec2 gearSize = ImGui::CalcTextSize(gearText);
     drawList->AddText(ImVec2(pos.x + 10, pos.y + (height - gearSize.y) * 0.5f),
                      IM_COL32(255, 255, 255, 255), gearText);
     ImGui::PopFont();
     
     // Speed display
-    // Convertir de m/s a km/h o mph según preferencia
+    // Convertir de m/s a km/h
     float speedKmh = m_currentSpeed * 3.6f;
     char speedText[32];
     snprintf(speedText, sizeof(speedText), "%.0f km/h", speedKmh);
