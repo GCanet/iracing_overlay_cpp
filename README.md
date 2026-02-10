@@ -144,6 +144,8 @@ assets/car_brands/
 ├── mclaren.png
 ├── ford.png
 └── chevrolet.png
+├── toyota.png
+└── mazda.png
 ```
 
 **Nota**: Si no existen los assets, el overlay funcionará igual pero no mostrará el logo (espacio vacío).
