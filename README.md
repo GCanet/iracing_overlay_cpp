@@ -125,7 +125,7 @@ iracing_overlay_cpp/
 │   │   └── irating_calc.*    # Proyección iRating
 │   └── utils/
 │       ├── config.*          # Configuración (placeholder)
-│       └── yaml_parser.*     # Parser SessionInfo ✨ NUEVO
+│       └── yaml_parser.*     # Parser SessionInfo 
 ├── include/
 │   └── irsdk/
 │       └── irsdk_defines.h   # Headers iRacing SDK
@@ -135,7 +135,7 @@ iracing_overlay_cpp/
 │   └── glad/
 ├── assets/                   # Assets opcionales
 │   └── car_brands/           # Logos PNG
-├── .gitignore                # ✨ NUEVO
+├── .gitignore                # 
 ├── CMakeLists.txt            # Build system actualizado
 ├── build.bat                 # Script compilación
 └── README.md                 # Esta documentación
