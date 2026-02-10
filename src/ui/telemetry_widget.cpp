@@ -9,7 +9,7 @@ TelemetryWidget::TelemetryWidget() {
 }
 
 void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
-    if (!sdk || !sdk->isConnected()) return;
+    if (!sdk || !sdk->isSessionActive()) return;
     
     // Get current values
     float throttle = sdk->getFloat("Throttle", 0.0f);

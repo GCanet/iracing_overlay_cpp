@@ -154,8 +154,7 @@ bool OverlayWindow::initialize() {
     std::cout << "  L      - Toggle Lock (drag mode)" << std::endl;
     std::cout << "  Drag   - Move widgets (when unlocked)" << std::endl;
     std::cout << std::endl;
-    std::cout << "Status: " << (m_clickThrough ? 
-        "LOCKED (widgets fixed)" : "UNLOCKED (drag to move widgets)") << std::endl;
+    std::cout << "Status: " << (m_clickThrough ? "LOCKED (widgets fixed)" : "UNLOCKED (drag to move widgets)") << std::endl;
     
     return true;
 }
@@ -241,51 +240,58 @@ void OverlayWindow::toggleClickThrough() {
     updateWindowAttributes();
     utils::Config::setClickThrough(m_clickThrough);
     
-    std::cout << (m_clickThrough ? 
-        "LOCKED (widgets fixed)" : "UNLOCKED (drag to move widgets)") << std::endl;
+    std::cout << (m_clickThrough ? "LOCKED (widgets fixed)" : "UNLOCKED (drag to move widgets)") << std::endl;
 }
 
 void OverlayWindow::run() {
     int connectionAttempts = 0;
     bool wasConnected = false;
-    int frameCount = 0;
     
     while (!glfwWindowShouldClose(m_window) && m_running) {
         glfwPollEvents();
         processInput();
-        frameCount++;
         
-        // Re-assert topmost every 15 frames (~250ms at 60fps)
-        // More aggressive than before to survive alt-tab and fullscreen switches
-        if (frameCount % 15 == 0) {
+        // Re-assert topmost EVERY frame - cheap call, prevents losing z-order
 #ifdef _WIN32
+        {
             HWND hwnd = glfwGetWin32Window(m_window);
             if (hwnd) {
                 SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, 
                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
-#endif
         }
+#endif
         
-        // Try to connect to iRacing
-        if (!m_sdk->isConnected()) {
-            if (!wasConnected) {
-                connectionAttempts++;
-                if (connectionAttempts % 60 == 0) {
-                    std::cout << "Attempting to connect to iRacing... (attempt " 
-                              << (connectionAttempts / 60) << ")" << std::endl;
-                }
+        // Connection management - use startup() which handles reconnection
+        if (!m_sdk->isSessionActive()) {
+            // Not connected or session not active - try to connect/reconnect
+            if (wasConnected) {
+                std::cout << "iRacing session disconnected, waiting for reconnection..." << std::endl;
+                wasConnected = false;
+                connectionAttempts = 0;
             }
             
-            if (m_sdk->startup()) {
+            connectionAttempts++;
+            if (connectionAttempts % 60 == 0) {
+                std::cout << "Attempting to connect to iRacing... (attempt " 
+                          << (connectionAttempts / 60) << ")" << std::endl;
+            }
+            
+            // startup() now handles both first connection and reconnection
+            if (m_sdk->startup() && m_sdk->isSessionActive()) {
                 std::cout << "Connected to iRacing!" << std::endl;
                 wasConnected = true;
                 connectionAttempts = 0;
             }
         } else {
-            // Connected - try to wait for new data, but update regardless
-            // waitForData is just a hint for new data; shared memory is always readable
-            m_sdk->waitForData(1);  // Short timeout, don't block
+            // Connected and session active
+            if (!wasConnected) {
+                std::cout << "Connected to iRacing!" << std::endl;
+                wasConnected = true;
+            }
+            
+            // Wait for new data (short timeout, don't block rendering)
+            m_sdk->waitForData(1);
             m_relative->update();
             
             // Debug: print first successful data read
@@ -331,7 +337,7 @@ void OverlayWindow::renderFrame() {
     }
     
     // Render widgets or connection status
-    if (m_sdk->isConnected()) {
+    if (m_sdk->isSessionActive()) {
         m_relativeWidget->render(m_relative.get());
         m_telemetryWidget->render(m_sdk.get());
     } else {
