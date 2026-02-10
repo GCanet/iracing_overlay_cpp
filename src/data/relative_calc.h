@@ -16,9 +16,9 @@ struct Driver {
     int carIdx = -1;
     int position = 0;              // CarIdxPosition (oficial del SDK)
     int relativePosition = 0;      // Posición calculada tras orden robusto (1 = líder)
-    int lap = 0;                   // CarIdxLap (vuelta actual)
+    int lap = 0;                   // CarIdxLap (vuelta actual en curso)
     int lapCompleted = 0;          // CarIdxLapCompleted (vueltas terminadas)
-    float lapDistPct = 0.0f;
+    float lapDistPct = 0.0f;       // Porcentaje de la vuelta actual
     float lastLapTime = 0.0f;
     float gapToLeader = 0.0f;
     float gapToPlayer = 0.0f;
@@ -41,10 +41,10 @@ public:
     
     void update();
     
-    // Get all drivers (ya ordenados por el update)
+    // Get all drivers (ya ordenados por update())
     const std::vector<Driver>& getAllDrivers() const { return m_allDrivers; }
     
-    // Relative alrededor del jugador (smart adjustment si estás 1º o último)
+    // Relative alrededor del jugador (smart adjustment)
     std::vector<Driver> getRelative(int ahead = 4, int behind = 4) const;
     
     int getPlayerCarIdx() const { return m_playerCarIdx; }
@@ -55,7 +55,7 @@ public:
 
 private:
     void updateSessionInfo();
-    void calculateGaps(const float* f2Times, int f2Count);  // ← firma actualizada
+    void calculateGaps(const float* f2Times, int f2Count);
     void calculateiRatingProjections();
     std::string getCarBrand(const std::string& carPath);
     
