@@ -170,11 +170,6 @@ assets/car_brands/
 └── mazda.png           
 ```
 
-## 🚀 Roadmap
-
-- [ ] Cargar texturas de logos de PNG
-- [ ] Modo "ghost" (click-through)
-
 ## ⚠️ Disclaimer
 
 Este proyecto usa únicamente la API oficial de iRacing SDK.
