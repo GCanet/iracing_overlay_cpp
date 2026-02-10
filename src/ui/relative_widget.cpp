@@ -104,14 +104,16 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         ImGui::Text("0");
     }
     
-    // Car brand logo (if asset exists, otherwise skip)
+    // Car brand logo area
     ImGui::SameLine(380);
     if (!driver.carBrand.empty() && driver.carBrand != "unknown") {
-        // TODO: Load actual logo texture - for now just show text
-        ImGui::Text("[%s]", driver.carBrand.c_str());
+        // TODO: When you add texture loading, replace this with ImGui::Image(...)
+        // For now we reserve space but show nothing
+        ImGui::Dummy(ImVec2(24, 24));   // invisible but keeps perfect alignment
     } else {
-        ImGui::Text("   "); // Empty space
+        ImGui::Dummy(ImVec2(24, 24));   // same size when no logo
     }
+    ImGui::SameLine(0.0f, 8.0f);   // small spacing after the logo column
     
     // Last lap time
     ImGui::SameLine(420);
