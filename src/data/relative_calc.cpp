@@ -91,7 +91,7 @@ void RelativeCalculator::update() {
             driver.iRating = it->second.iRating;
             driver.safetyRating = static_cast<float>(it->second.licenseLevel) / 4.0f;
             driver.carBrand = getCarBrand(it->second.carPath);
-            driver.carClass = "GT3"; // TODO: Parse from session info
+            driver.carClass = it->second.carClassShortName.empty() ? "???" : it->second.carClassShortName;
         } else {
             // Fallback if not in session info
             driver.carNumber = std::to_string(i);
