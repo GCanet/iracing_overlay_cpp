@@ -20,7 +20,18 @@ IRSDKManager::~IRSDKManager() {
 }
 
 bool IRSDKManager::startup() {
-    if (m_connected) return true;
+    if (m_connected) {
+        // Already have shared memory open - check if iRacing is still there
+        if (m_pHeader && (m_pHeader->status & irsdk_stConnected)) {
+            return true;  // Still connected and active
+        }
+        // Shared memory open but iRacing disconnected (session ended, sim closed)
+        // Close everything and try to reconnect
+        std::cout << "iRacing session ended, reconnecting..." << std::endl;
+        closeSharedMemory();
+        m_connected = false;
+        m_lastTickCount = 0;
+    }
     
     if (openSharedMemory()) {
         m_connected = true;
@@ -33,6 +44,18 @@ bool IRSDKManager::startup() {
 void IRSDKManager::shutdown() {
     closeSharedMemory();
     m_connected = false;
+}
+
+bool IRSDKManager::isConnected() const {
+    return m_connected && m_pHeader != nullptr;
+}
+
+bool IRSDKManager::isSessionActive() const {
+    // Both conditions must be true:
+    // 1) We have the shared memory open (m_connected + valid header)
+    // 2) iRacing reports the session as connected via status flag
+    return m_connected && m_pHeader != nullptr 
+        && (m_pHeader->status & irsdk_stConnected);
 }
 
 bool IRSDKManager::openSharedMemory() {
@@ -75,8 +98,7 @@ bool IRSDKManager::openSharedMemory() {
     // initialized it yet (e.g. still loading, no session active).
     // Don't treat this as an error - just release and retry next time.
     if (m_pHeader->ver != 2) {
-        // Only close the mapping; do NOT print an error every attempt.
-        // The main loop will silently retry on the next frame.
+        // Clean up properly to avoid memory leak
         UnmapViewOfFile(m_pSharedMem);
         m_pSharedMem = nullptr;
         m_pHeader = nullptr;
@@ -125,6 +147,11 @@ void IRSDKManager::closeSharedMemory() {
 
 bool IRSDKManager::waitForData(int timeoutMS) {
     if (!m_connected || !m_pHeader) return false;
+    
+    // Check if session is still active
+    if (!(m_pHeader->status & irsdk_stConnected)) {
+        return false;
+    }
     
     // If we have the event handle, use it for efficient waiting
     if (m_hDataValidEvent) {

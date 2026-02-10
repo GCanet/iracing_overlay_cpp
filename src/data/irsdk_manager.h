@@ -17,7 +17,11 @@ public:
     // Connection
     bool startup();
     void shutdown();
-    bool isConnected() const { return m_connected; }
+    bool isConnected() const;
+    
+    // Check if SDK session is actively providing data
+    // (shared memory open AND irsdk_stConnected flag set)
+    bool isSessionActive() const;
     
     // Data access
     bool waitForData(int timeoutMS = 16);
