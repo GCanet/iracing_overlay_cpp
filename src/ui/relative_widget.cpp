@@ -8,41 +8,53 @@
 
 namespace ui {
 
+// Fixed dimensions for 8 driver rows + header
+static constexpr float ROW_HEIGHT = 28.0f;
+static constexpr int MAX_VISIBLE_DRIVERS = 8;
+static constexpr float HEADER_HEIGHT = 24.0f;
+static constexpr float SEPARATOR_HEIGHT = 4.0f;
+static constexpr float WINDOW_WIDTH = 520.0f;
+// header + separator + 8 rows + padding (top 10 + bottom 10)
+static constexpr float WINDOW_HEIGHT = HEADER_HEIGHT + SEPARATOR_HEIGHT + (MAX_VISIBLE_DRIVERS * ROW_HEIGHT) + 20.0f;
+
 RelativeWidget::RelativeWidget() {
 }
 
 void RelativeWidget::render(iracing::RelativeCalculator* relative) {
     if (!relative) return;
     
-    // Get drivers (4 ahead, 4 behind)
+    // Get drivers (4 ahead, 4 behind = up to 9 with player, display max 8)
     auto drivers = relative->getRelative(4, 4);
+    
+    // Limit to MAX_VISIBLE_DRIVERS
+    if (drivers.size() > MAX_VISIBLE_DRIVERS) {
+        drivers.resize(MAX_VISIBLE_DRIVERS);
+    }
     
     // Load config
     auto& config = utils::Config::getRelativeConfig();
+    
+    // Fixed size always
+    ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT), ImGuiCond_Always);
     
     // Window position from config (or default)
     if (config.posX < 0 || config.posY < 0) {
         // First use - top left corner
         ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
     } else {
-        // Use saved position, but only set it once per frame to allow dragging
+        // Use saved position, but only set it once to allow dragging
         ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
-    }
-    
-    // Window size from config
-    if (config.width > 0 && config.height > 0) {
-        ImGui::SetNextWindowSize(ImVec2(config.width, config.height), ImGuiCond_Once);
-    } else {
-        ImGui::SetNextWindowSize(ImVec2(500, 0), ImGuiCond_FirstUseEver);
     }
     
     // Window alpha from config
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
     
-    // Window flags - allow moving when not click-through
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+    // Window flags - NEVER resize, lock/unlock only controls move
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | 
+                             ImGuiWindowFlags_NoTitleBar | 
+                             ImGuiWindowFlags_NoResize;
     
-    // Check if we're in click-through mode (from global config)
+    // Check if we're in locked mode (from global config)
     bool isLocked = utils::Config::isClickThrough();
     if (isLocked) {
         flags |= ImGuiWindowFlags_NoMove;  // Can't move when locked
@@ -50,13 +62,12 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative) {
     
     ImGui::Begin("##RELATIVE", nullptr, flags);
     
-    // Save position and size back to config (will update as user drags)
+    // Save position back to config (will update as user drags)
     ImVec2 pos = ImGui::GetWindowPos();
-    ImVec2 size = ImGui::GetWindowSize();
     config.posX = pos.x;
     config.posY = pos.y;
-    config.width = size.x;
-    config.height = size.y;
+    config.width = WINDOW_WIDTH;
+    config.height = WINDOW_HEIGHT;
     
     // Header
     renderHeader(relative);
@@ -90,7 +101,7 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
     // Player background
     if (isPlayer) {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.7f, 0.0f, 0.6f));
-        ImGui::Selectable("##player", true, 0, ImVec2(0, 28));
+        ImGui::Selectable("##player", true, 0, ImVec2(0, ROW_HEIGHT));
         ImGui::PopStyleColor();
         ImGui::SameLine(0, 0);
         ImGui::SetCursorPosX(10);

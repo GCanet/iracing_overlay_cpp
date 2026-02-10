@@ -30,6 +30,8 @@
     #endif
 
     #include <Windows.h>
+    #include <dwmapi.h>
+    #pragma comment(lib, "dwmapi.lib")
 #endif
 
 namespace ui {
@@ -100,15 +102,15 @@ bool OverlayWindow::initialize() {
         return false;
     }
     
+    // Enable blending for proper transparency
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
     // Load config BEFORE applying window attributes
     utils::Config::load("config.ini");
     
     // Check if we should start locked (default to true if not in config)
     m_clickThrough = utils::Config::isClickThrough();
-    if (!m_clickThrough) {
-        // Config says unlocked, but we default to locked on first run
-        // Only unlock if explicitly saved as unlocked
-    }
     
     // Apply Windows-specific overlay attributes
     updateWindowAttributes();
@@ -131,11 +133,11 @@ bool OverlayWindow::initialize() {
     std::cout << std::endl;
     std::cout << "Controls:" << std::endl;
     std::cout << "  Q      - Quit" << std::endl;
-    std::cout << "  L      - Toggle Lock (click-through mode)" << std::endl;
+    std::cout << "  L      - Toggle Lock (drag mode)" << std::endl;
     std::cout << "  Drag   - Move widgets (when unlocked)" << std::endl;
     std::cout << std::endl;
-    std::cout << "Status: " << (m_clickThrough ? "🔒 LOCKED" : "🔓 UNLOCKED") << std::endl;
-    std::cout << std::endl;
+    std::cout << "Status: " << (m_clickThrough ?
+        "🔒 LOCKED (widgets fixed)" : "🔓 UNLOCKED (drag to move widgets)") << std::endl;
     
     return true;
 }
@@ -163,9 +165,9 @@ void OverlayWindow::setupStyle() {
     // Customize colors
     ImVec4* colors = style.Colors;
     
-    // Apply global alpha from config
-    float globalAlpha = utils::Config::getGlobalAlpha();
-    colors[ImGuiCol_WindowBg] = ImVec4(0.0f, 0.0f, 0.0f, globalAlpha);
+    // All window backgrounds fully transparent by default
+    // Individual widgets control their own alpha
+    colors[ImGuiCol_WindowBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
     colors[ImGuiCol_Border] = ImVec4(0.0f, 1.0f, 0.0f, 0.3f);
     colors[ImGuiCol_Text] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     colors[ImGuiCol_Header] = ImVec4(0.0f, 0.5f, 0.0f, 0.8f);
@@ -187,33 +189,32 @@ void OverlayWindow::updateWindowAttributes() {
     HWND hwnd = glfwGetWin32Window(m_window);
     if (!hwnd) return;
     
+    // Extend DWM frame into client area for per-pixel alpha transparency
+    MARGINS margins = { -1, -1, -1, -1 };
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    
     // Get current style
     LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
     
-    // ALWAYS make it a layered window (required for transparency)
-    exStyle |= WS_EX_LAYERED;
-    
     if (m_clickThrough) {
-        // Enable click-through: add WS_EX_TRANSPARENT
-        exStyle |= WS_EX_TRANSPARENT;
-        std::cout << "🔒 Click-through ENABLED" << std::endl;
+        // LOCKED: click-through entire window, no dragging
+        exStyle |= WS_EX_LAYERED | WS_EX_TRANSPARENT;
     } else {
-        // Disable click-through: remove WS_EX_TRANSPARENT
+        // UNLOCKED: window captures input for widget dragging
+        // Remove click-through but keep layered for DWM compatibility
+        exStyle |= WS_EX_LAYERED;
         exStyle &= ~WS_EX_TRANSPARENT;
-        std::cout << "🔓 Click-through DISABLED" << std::endl;
     }
     
     // Apply the style
     SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
     
-    // Set transparency (255 = fully opaque for the window frame, but ImGui controls alpha per-pixel)
-    SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    // DO NOT call SetLayeredWindowAttributes - it overrides per-pixel alpha
+    // The transparent framebuffer + DWM handles transparency
     
-    // ALWAYS keep it topmost
+    // ALWAYS keep it topmost - use SWP_NOACTIVATE to not steal focus
     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, 
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    
-    std::cout << "Window attributes updated" << std::endl;
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 #endif
 }
 
@@ -222,22 +223,36 @@ void OverlayWindow::toggleClickThrough() {
     updateWindowAttributes();
     utils::Config::setClickThrough(m_clickThrough);
     
-    std::cout << (m_clickThrough ? "🔒 LOCKED (click-through enabled)" : "🔓 UNLOCKED (click-through disabled)") << std::endl;
+    std::cout << (m_clickThrough ?
+        "🔒 LOCKED (widgets fixed)" : "🔓 UNLOCKED (drag to move widgets)") << std::endl;
 }
 
 void OverlayWindow::run() {
     int connectionAttempts = 0;
     bool wasConnected = false;
+    int frameCount = 0;
     
     while (!glfwWindowShouldClose(m_window) && m_running) {
         glfwPollEvents();
         processInput();
+        frameCount++;
+        
+        // Re-assert topmost every 60 frames (~1 second) to stay above fullscreen apps
+        if (frameCount % 60 == 0) {
+#ifdef _WIN32
+            HWND hwnd = glfwGetWin32Window(m_window);
+            if (hwnd) {
+                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, 
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+#endif
+        }
         
         // Try to connect to iRacing
         if (!m_sdk->isConnected()) {
             if (!wasConnected) {
                 connectionAttempts++;
-                if (connectionAttempts % 60 == 0) {  // Every ~1 second at 60fps
+                if (connectionAttempts % 60 == 0) {
                     std::cout << "⏳ Attempting to connect to iRacing... (attempt " 
                               << (connectionAttempts / 60) << ")" << std::endl;
                 }
@@ -249,21 +264,17 @@ void OverlayWindow::run() {
                 connectionAttempts = 0;
             }
         } else {
-            // Connected - wait for data and update
-            if (m_sdk->waitForData(16)) {
-                m_relative->update();
-                
-                // Debug: print first successful data read
-                static bool firstData = true;
-                if (firstData) {
-                    std::cout << "📊 Receiving telemetry data!" << std::endl;
-                    firstData = false;
-                }
-            }
+            // Connected - try to wait for new data, but update regardless
+            // waitForData is just a hint for new data; shared memory is always readable
+            m_sdk->waitForData(1);  // Short timeout, don't block
+            m_relative->update();
             
-            // Check if we lost connection
-            if (!wasConnected) {
-                wasConnected = true;
+            // Debug: print first successful data read
+            static bool firstData = true;
+            if (firstData && !m_relative->getAllDrivers().empty()) {
+                std::cout << "📊 Receiving telemetry data! (" 
+                          << m_relative->getAllDrivers().size() << " drivers found)" << std::endl;
+                firstData = false;
             }
         }
         
@@ -285,7 +296,7 @@ void OverlayWindow::renderFrame() {
             ImVec2(ImGui::GetIO().DisplaySize.x - 220, 
                    ImGui::GetIO().DisplaySize.y - 110), 
             ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.5f);  // 50% translucent when unlocked
+        ImGui::SetNextWindowBgAlpha(0.5f);
         ImGui::Begin("##LockStatus", nullptr, 
             ImGuiWindowFlags_NoResize | 
             ImGuiWindowFlags_NoMove |
@@ -333,7 +344,7 @@ void OverlayWindow::renderFrame() {
     int display_w, display_h;
     glfwGetFramebufferSize(m_window, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Fully transparent
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Fully transparent background
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     
@@ -347,7 +358,7 @@ void OverlayWindow::processInput() {
         m_running = false;
     }
     
-    // L to toggle lock (click-through)
+    // L to toggle lock (drag mode)
     if (glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS) {
         if (!m_lockKeyPressed) {
             toggleClickThrough();
