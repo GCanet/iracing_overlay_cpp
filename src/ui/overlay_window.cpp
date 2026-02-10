@@ -5,19 +5,31 @@
 #include "data/relative_calc.h"
 #include "utils/config.h"
 
+// OpenGL loader FIRST – must come before anything that might pull GL
 #include <glad/glad.h>
+
+// Tell GLFW not to include any GL headers itself
 #define GLFW_INCLUDE_NONE
-#ifdef APIENTRY
-#undef APIENTRY
+#include <GLFW/glfw3.h>
+
+// ImGui (safe after glad + GLFW)
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
+
 #include <iostream>
 
+// Windows-specific stuff – do this LAST
 #ifdef _WIN32
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
-#include <Windows.h>
+    #define GLFW_EXPOSE_NATIVE_WIN32
+    #include <GLFW/glfw3native.h>
+
+    // Let Windows define its own APIENTRY – undef Glad's version first to avoid warning
+    #ifdef APIENTRY
+        #undef APIENTRY
+    #endif
+
+    #include <Windows.h>
 #endif
 
 namespace ui {
