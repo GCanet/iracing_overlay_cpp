@@ -28,6 +28,9 @@ private:
     void setupStyle();
     void renderFrame();
     void processInput();
+    void toggleClickThrough();
+    void updateWindowAttributes();
+    void saveConfigOnExit();
     
     GLFWwindow* m_window;
     
@@ -41,6 +44,8 @@ private:
     
     // State
     bool m_running;
+    bool m_clickThrough;
+    bool m_lockKeyPressed;
     
     // Window settings
     int m_windowWidth;

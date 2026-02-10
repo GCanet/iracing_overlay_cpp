@@ -1,5 +1,6 @@
 #include "ui/relative_widget.h"
 #include "data/relative_calc.h"
+#include "utils/config.h"
 #include "imgui.h"
 #include <sstream>
 #include <iomanip>
@@ -16,21 +17,44 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative) {
     // Get drivers (4 ahead, 4 behind)
     auto drivers = relative->getRelative(4, 4);
     
-    // Window position (top right)
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 520, 20), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(500, 0), ImGuiCond_FirstUseEver);
+    // Load config
+    auto& config = utils::Config::getRelativeConfig();
     
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.6f));
+    // Window position from config (or default)
+    if (config.posX < 0 || config.posY < 0) {
+        // First use - top right default
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 520, 20), ImGuiCond_FirstUseEver);
+    } else {
+        ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Always);
+    }
+    
+    // Window size from config
+    if (config.width > 0 && config.height > 0) {
+        ImGui::SetNextWindowSize(ImVec2(config.width, config.height), ImGuiCond_Always);
+    } else {
+        ImGui::SetNextWindowSize(ImVec2(500, 0), ImGuiCond_FirstUseEver);
+    }
+    
+    // Window alpha from config
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
+    
     ImGui::Begin("##RELATIVE", nullptr, 
         ImGuiWindowFlags_NoCollapse | 
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoResize);
+        ImGuiWindowFlags_NoTitleBar);
+    
+    // Save position and size back to config
+    ImVec2 pos = ImGui::GetWindowPos();
+    ImVec2 size = ImGui::GetWindowSize();
+    config.posX = pos.x;
+    config.posY = pos.y;
+    config.width = size.x;
+    config.height = size.y;
     
     // Header
     renderHeader(relative);
     ImGui::Separator();
     
-    // OPTIMIZACIÓN: Pre-allocate buffer para formateo de strings
+    // Pre-allocate buffer for string formatting
     char buffer[256];
     
     // Driver rows
@@ -64,7 +88,7 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         ImGui::SetCursorPosX(10);
     }
     
-    // OPTIMIZACIÓN: Una sola llamada de formateo para número de posición
+    // Position number
     ImGui::Text("%2d", driver.position);
     
     // Car number + Driver name

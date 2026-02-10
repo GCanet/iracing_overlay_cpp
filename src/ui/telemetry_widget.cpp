@@ -1,5 +1,6 @@
 #include "ui/telemetry_widget.h"
 #include "data/irsdk_manager.h"
+#include "utils/config.h"
 #include "imgui.h"
 
 namespace ui {
@@ -17,17 +18,42 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
     // Update history
     updateHistory(throttle, brake);
     
-    // Window position (bottom right)
-    ImGui::SetNextWindowPos(
-        ImVec2(ImGui::GetIO().DisplaySize.x - 340, 
-               ImGui::GetIO().DisplaySize.y - 180), 
-        ImGuiCond_FirstUseEver
-    );
-    ImGui::SetNextWindowSize(ImVec2(320, 160), ImGuiCond_FirstUseEver);
+    // Load config
+    auto& config = utils::Config::getTelemetryConfig();
+    
+    // Window position from config (or default)
+    if (config.posX < 0 || config.posY < 0) {
+        // First use - bottom right default
+        ImGui::SetNextWindowPos(
+            ImVec2(ImGui::GetIO().DisplaySize.x - 340, 
+                   ImGui::GetIO().DisplaySize.y - 180), 
+            ImGuiCond_FirstUseEver
+        );
+    } else {
+        ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Always);
+    }
+    
+    // Window size from config
+    if (config.width > 0 && config.height > 0) {
+        ImGui::SetNextWindowSize(ImVec2(config.width, config.height), ImGuiCond_Always);
+    } else {
+        ImGui::SetNextWindowSize(ImVec2(320, 160), ImGuiCond_FirstUseEver);
+    }
+    
+    // Window alpha from config
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
     
     ImGui::Begin("TELEMETRY", nullptr, ImGuiWindowFlags_NoCollapse);
     
-    // OPTIMIZACIÓN: Un solo DrawList para ambos gráficos
+    // Save position and size back to config
+    ImVec2 pos = ImGui::GetWindowPos();
+    ImVec2 size = ImGui::GetWindowSize();
+    config.posX = pos.x;
+    config.posY = pos.y;
+    config.width = size.x;
+    config.height = size.y;
+    
+    // Single DrawList for both graphs (optimization)
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Throttle graph
@@ -45,6 +71,7 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
     ImGui::Dummy(ImVec2(GRAPH_WIDTH, GRAPH_HEIGHT));
     
     ImGui::End();
+    ImGui::PopStyleColor();
 }
 
 void TelemetryWidget::updateHistory(float throttle, float brake) {
@@ -66,7 +93,7 @@ void TelemetryWidget::renderGraph(ImDrawList* draw_list, ImVec2 canvas_pos,
     
     ImVec2 canvas_size(GRAPH_WIDTH, GRAPH_HEIGHT);
     
-    // OPTIMIZACIÓN: Colors precalculadas
+    // Pre-calculated colors (optimization)
     ImU32 bg_color = IM_COL32(20, 20, 20, 180);
     ImU32 line_color = IM_COL32(
         static_cast<int>(color[0] * 255),
@@ -83,7 +110,7 @@ void TelemetryWidget::renderGraph(ImDrawList* draw_list, ImVec2 canvas_pos,
         bg_color
     );
     
-    // OPTIMIZACIÓN: PathLineTo en vez de múltiples AddLine (1 draw call en vez de N)
+    // PathLineTo instead of multiple AddLine (1 draw call instead of N)
     if (data.size() > 1) {
         float step = canvas_size.x / static_cast<float>(data.size());
         
