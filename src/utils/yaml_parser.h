@@ -18,6 +18,7 @@ public:
         int iRating;
         int licenseLevel;
         std::string carPath;
+        std::string carClassShortName;
     };
     
     struct SessionInfo {
