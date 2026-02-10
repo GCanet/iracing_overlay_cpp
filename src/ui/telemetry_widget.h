@@ -28,7 +28,7 @@ private:
     std::deque<float> m_brakeHistory;
     
     static constexpr int MAX_HISTORY = 180; // 3 seconds at 60Hz
-    static constexpr float GRAPH_WIDTH = 300.0f;
+    static constexpr float GRAPH_WIDTH = 255.0f;  // 15% smaller than 300
     static constexpr float GRAPH_HEIGHT = 60.0f;
 };
 

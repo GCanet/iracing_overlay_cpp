@@ -5,7 +5,7 @@
 #include "data/relative_calc.h"
 #include "utils/config.h"
 
-// OpenGL loader FIRST – must come before anything that might pull GL
+// OpenGL loader FIRST - must come before anything that might pull GL
 #include <glad/glad.h>
 
 // Tell GLFW not to include any GL headers itself
@@ -19,12 +19,16 @@
 
 #include <iostream>
 
-// Windows-specific stuff – do this LAST
+// Windows-specific stuff - do this LAST
 #ifdef _WIN32
     #define GLFW_EXPOSE_NATIVE_WIN32
     #include <GLFW/glfw3native.h>
 
-    // Let Windows define its own APIENTRY – undef Glad's version first to avoid warning
+    // Suppress C4005: 'APIENTRY' macro redefinition coming from minwindef.h
+    #pragma warning(push)
+    #pragma warning(disable: 4005)
+
+    // Let Windows define its own APIENTRY - undef Glad's version first
     #ifdef APIENTRY
         #undef APIENTRY
     #endif
@@ -32,6 +36,8 @@
     #include <Windows.h>
     #include <dwmapi.h>
     #pragma comment(lib, "dwmapi.lib")
+
+    #pragma warning(pop)
 #endif
 
 namespace ui {
@@ -68,6 +74,7 @@ bool OverlayWindow::initialize() {
     glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);            // Always on top
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);          // Non-resizable
     glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);      // Don't steal focus
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);            // Start HIDDEN to avoid black flash
     
     // Get monitor size for fullscreen overlay
     GLFWmonitor* primary = glfwGetPrimaryMonitor();
@@ -127,17 +134,28 @@ bool OverlayWindow::initialize() {
     m_relativeWidget = std::make_unique<RelativeWidget>();
     m_telemetryWidget = std::make_unique<TelemetryWidget>();
     
+    // Render one fully transparent frame BEFORE showing the window
+    // This prevents the black flash on startup
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glfwSwapBuffers(m_window);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glfwSwapBuffers(m_window);
+    
+    // NOW show the window - it will be fully transparent, no black flash
+    glfwShowWindow(m_window);
+    
     m_running = true;
     
-    std::cout << "✅ Overlay initialized" << std::endl;
+    std::cout << "Overlay initialized" << std::endl;
     std::cout << std::endl;
     std::cout << "Controls:" << std::endl;
     std::cout << "  Q      - Quit" << std::endl;
     std::cout << "  L      - Toggle Lock (drag mode)" << std::endl;
     std::cout << "  Drag   - Move widgets (when unlocked)" << std::endl;
     std::cout << std::endl;
-    std::cout << "Status: " << (m_clickThrough ?
-        "🔒 LOCKED (widgets fixed)" : "🔓 UNLOCKED (drag to move widgets)") << std::endl;
+    std::cout << "Status: " << (m_clickThrough ? 
+        "LOCKED (widgets fixed)" : "UNLOCKED (drag to move widgets)") << std::endl;
     
     return true;
 }
@@ -223,8 +241,8 @@ void OverlayWindow::toggleClickThrough() {
     updateWindowAttributes();
     utils::Config::setClickThrough(m_clickThrough);
     
-    std::cout << (m_clickThrough ?
-        "🔒 LOCKED (widgets fixed)" : "🔓 UNLOCKED (drag to move widgets)") << std::endl;
+    std::cout << (m_clickThrough ? 
+        "LOCKED (widgets fixed)" : "UNLOCKED (drag to move widgets)") << std::endl;
 }
 
 void OverlayWindow::run() {
@@ -237,8 +255,9 @@ void OverlayWindow::run() {
         processInput();
         frameCount++;
         
-        // Re-assert topmost every 60 frames (~1 second) to stay above fullscreen apps
-        if (frameCount % 60 == 0) {
+        // Re-assert topmost every 15 frames (~250ms at 60fps)
+        // More aggressive than before to survive alt-tab and fullscreen switches
+        if (frameCount % 15 == 0) {
 #ifdef _WIN32
             HWND hwnd = glfwGetWin32Window(m_window);
             if (hwnd) {
@@ -253,13 +272,13 @@ void OverlayWindow::run() {
             if (!wasConnected) {
                 connectionAttempts++;
                 if (connectionAttempts % 60 == 0) {
-                    std::cout << "⏳ Attempting to connect to iRacing... (attempt " 
+                    std::cout << "Attempting to connect to iRacing... (attempt " 
                               << (connectionAttempts / 60) << ")" << std::endl;
                 }
             }
             
             if (m_sdk->startup()) {
-                std::cout << "✅ Connected to iRacing!" << std::endl;
+                std::cout << "Connected to iRacing!" << std::endl;
                 wasConnected = true;
                 connectionAttempts = 0;
             }
@@ -272,7 +291,7 @@ void OverlayWindow::run() {
             // Debug: print first successful data read
             static bool firstData = true;
             if (firstData && !m_relative->getAllDrivers().empty()) {
-                std::cout << "📊 Receiving telemetry data! (" 
+                std::cout << "Receiving telemetry data! (" 
                           << m_relative->getAllDrivers().size() << " drivers found)" << std::endl;
                 firstData = false;
             }
@@ -304,7 +323,7 @@ void OverlayWindow::renderFrame() {
             ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoFocusOnAppearing);
         
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "🔓 UNLOCKED");
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "UNLOCKED");
         ImGui::Text("Drag widgets to move");
         ImGui::Text("Press L to lock");
         
@@ -328,14 +347,13 @@ void OverlayWindow::renderFrame() {
             ImGuiWindowFlags_NoTitleBar |
             ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoFocusOnAppearing);
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "⏳ Waiting for iRacing...");
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Waiting for iRacing...");
         ImGui::Separator();
         ImGui::TextWrapped("Make sure iRacing is running and you're in a session");
         ImGui::Text(" ");
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Troubleshooting:");
-        ImGui::BulletText("Start a Test Drive session");
-        ImGui::BulletText("Go to Options → Enable SDK");
-        ImGui::BulletText("Restart overlay after starting iRacing");
+        ImGui::BulletText("Start a Test Drive or any session");
+        ImGui::BulletText("Wait for the session to fully load");
         ImGui::End();
     }
     
@@ -370,7 +388,7 @@ void OverlayWindow::processInput() {
 }
 
 void OverlayWindow::saveConfigOnExit() {
-    std::cout << "💾 Saving configuration..." << std::endl;
+    std::cout << "Saving configuration..." << std::endl;
     utils::Config::save("config.ini");
 }
 
