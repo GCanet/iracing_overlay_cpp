@@ -33,7 +33,7 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, config.alpha));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
-    ImGui:PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);  // FIX: ImGui:: en lugar de ImGui:
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse |
                              ImGuiWindowFlags_NoTitleBar |
@@ -104,63 +104,67 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
 
     // Colorear la fila del jugador
     if (isPlayer) {
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(0, 100, 0, 100));
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(255, 215, 0, 40));
     }
 
-    // Grisear si está en pits
-    if (driver.isOnPit) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-    }
-
-    // Column: Position
+    // Columna: Posición
     ImGui::TableNextColumn();
-    ImGui::Text("P%d", driver.relativePosition);
+    if (driver.isOnPit) {
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "PIT");
+    } else {
+        ImGui::Text("P%d", driver.relativePosition);
+    }
 
-    // Column: Car Number
+    // Columna: Número de coche
     ImGui::TableNextColumn();
     ImGui::Text("#%s", driver.carNumber.c_str());
 
-    // Column: Driver Name
+    // Columna: Nombre del piloto
     ImGui::TableNextColumn();
-    ImGui::Text("%s", driver.driverName.c_str());
-
-    // Column: Safety Rating
-    ImGui::TableNextColumn();
-    const char* srLetter = getSafetyRatingLetter(driver.safetyRating);
-    float srR, srG, srB;
-    getSafetyRatingColor(driver.safetyRating, srR, srG, srB);
-    ImGui::TextColored(ImVec4(srR, srG, srB, 1.0f), "%s", srLetter);
-
-    // Column: iRating
-    ImGui::TableNextColumn();
-    ImGui::Text("%d", driver.iRating);
-    
-    // iRating projection (optional, small text below)
-    if (driver.iRatingProjection != 0) {
-        ImGui::SameLine();
-        if (driver.iRatingProjection > 0) {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "+%d", driver.iRatingProjection);
-        } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%d", driver.iRatingProjection);
-        }
-    }
-
-    // Column: Last Lap Time
-    ImGui::TableNextColumn();
-    if (driver.lastLapTime > 0.0f) {
-        formatTime(driver.lastLapTime, buffer);
-        ImGui::Text("%s", buffer);
+    if (isPlayer) {
+        ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", driver.driverName.c_str());
     } else {
-        ImGui::Text("---");
+        ImGui::Text("%s", driver.driverName.c_str());
     }
 
-    // Column: Gap
+    // Columna: Safety Rating
     ImGui::TableNextColumn();
-    formatGap(driver.gapToPlayer, buffer);
+    float r, g, b;
+    getSafetyRatingColor(driver.safetyRating, r, g, b);
+    ImGui::TextColored(ImVec4(r, g, b, 1.0f), "%s%.1f", 
+                      getSafetyRatingLetter(driver.safetyRating),
+                      driver.safetyRating - (int)driver.safetyRating >= 0 ? 
+                          driver.safetyRating - (int)driver.safetyRating : 
+                          1.0f + (driver.safetyRating - (int)driver.safetyRating));
+
+    // Columna: iRating
+    ImGui::TableNextColumn();
+    snprintf(buffer, 128, "%dk", driver.iRating / 1000);
+    if (driver.iRatingProjection != 0) {
+        int diff = driver.iRatingProjection - driver.iRating;
+        if (diff > 0) {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%s +%d", buffer, diff);
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s %d", buffer, diff);
+        }
+    } else {
+        ImGui::Text("%s", buffer);
+    }
+
+    // Columna: Last Lap Time
+    ImGui::TableNextColumn();
+    formatTime(driver.lastLapTime, buffer);
     ImGui::Text("%s", buffer);
 
-    if (driver.isOnPit) {
-        ImGui::PopStyleColor();
+    // Columna: Gap
+    ImGui::TableNextColumn();
+    formatGap(driver.gapToPlayer, buffer);
+    if (driver.gapToPlayer > 0) {
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", buffer);
+    } else if (driver.gapToPlayer < 0) {
+        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "%s", buffer);
+    } else {
+        ImGui::Text("%s", buffer);
     }
 }
 

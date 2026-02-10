@@ -178,7 +178,8 @@ void OverlayWindow::toggleEditMode() {
     m_editMode = !m_editMode;
     applyWindowAttributes(); // Re-apply window attributes to update click-through
     
-    std::cout << (m_editMode ? "🔓 EDIT MODE - You can drag widgets" : "🔒 LOCKED - Click-through enabled") << std::endl;
+    std::cout << (m_editMode ? 
+        "🔓 EDIT MODE - You can drag widgets" : "🔒 LOCKED - Click-through enabled") << std::endl;
 }
 
 void OverlayWindow::run() {
@@ -188,9 +189,17 @@ void OverlayWindow::run() {
 
         // Update iRacing data
         if (m_sdk) {
-            m_sdk->update();
-            if (m_sdk->isSessionActive()) {
-                m_relative->update();
+            // Intentar conectar si no está conectado
+            if (!m_sdk->isConnected()) {
+                m_sdk->startup();
+            }
+            
+            // Esperar y procesar nuevos datos (waitForData reemplaza update)
+            if (m_sdk->waitForData(16)) {
+                // Nuevos datos disponibles, actualizar relative
+                if (m_sdk->isSessionActive()) {
+                    m_relative->update();
+                }
             }
         }
 
@@ -252,44 +261,36 @@ void OverlayWindow::processInput() {
         m_running = false;
     }
 
-    // L - Toggle Lock/Edit mode
+    // L - Toggle lock mode (with debounce)
     static bool lKeyWasPressed = false;
-    bool lKeyPressed = (glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS);
+    bool lKeyPressed = glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS;
     if (lKeyPressed && !lKeyWasPressed) {
         toggleEditMode();
     }
     lKeyWasPressed = lKeyPressed;
-
-    // ESC - Toggle edit mode (alternativa)
-    static bool escKeyWasPressed = false;
-    bool escKeyPressed = (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-    if (escKeyPressed && !escKeyWasPressed) {
-        toggleEditMode();
-    }
-    escKeyWasPressed = escKeyPressed;
-}
-
-void OverlayWindow::saveConfigOnExit() {
-    utils::Config::setGlobalAlpha(m_globalAlpha);
-    utils::Config::save("config.ini");
-    std::cout << "📁 Config saved" << std::endl;
 }
 
 void OverlayWindow::shutdown() {
     saveConfigOnExit();
 
-    // Cleanup ImGui
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    // Cleanup GLFW
     if (m_window) {
         glfwDestroyWindow(m_window);
+        m_window = nullptr;
     }
     glfwTerminate();
 
-    std::cout << "👋 Overlay shutdown complete" << std::endl;
+    if (m_sdk) {
+        m_sdk->shutdown();
+    }
+}
+
+void OverlayWindow::saveConfigOnExit() {
+    utils::Config::save("config.ini");
+    std::cout << "Config saved." << std::endl;
 }
 
 } // namespace ui
