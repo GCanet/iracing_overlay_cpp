@@ -33,7 +33,6 @@ include_directories(
 # ImGui sources
 set(IMGUI_SOURCES
     external/imgui/imgui.cpp
-    external/imgui/imgui_demo.cpp
     external/imgui/imgui_draw.cpp
     external/imgui/imgui_tables.cpp
     external/imgui/imgui_widgets.cpp

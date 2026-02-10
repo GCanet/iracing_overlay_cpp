@@ -52,6 +52,7 @@ Overlay profesional de alto rendimiento para iRacing con consumo mínimo de recu
 
 - **Q**: Salir
 - **Drag**: Mover ventanas
+- **Right-click**: Configurar widgets (futuro)
 
 ## 📦 Compilación
 
@@ -74,7 +75,31 @@ git clone --depth 1 --branch 3.3.8 https://github.com/glfw/glfw.git
 git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git
 ```
 
-### 3. Compilar
+### 3. Descargar GLAD
+
+1. Ve a: https://glad.dav1d.de/
+2. Configuración:
+   - Profile: **Core**
+   - API gl: **Version 3.3**
+3. Click **GENERATE**
+4. Descarga y extrae en `external/glad/`
+
+Estructura final:
+```
+external/
+├── glfw/
+├── imgui/
+└── glad/
+    ├── include/
+    │   ├── glad/
+    │   │   └── glad.h
+    │   └── KHR/
+    │       └── khrplatform.h
+    └── src/
+        └── glad.c
+```
+
+### 4. Compilar
 
 #### Windows (Visual Studio):
 ```bash
@@ -97,7 +122,7 @@ O simplemente ejecuta:
 build.bat
 ```
 
-### 4. Ejecutar
+### 5. Ejecutar
 
 ```bash
 cd build\bin\Release
@@ -110,6 +135,35 @@ iRacingOverlay.exe
 2. **Abre iRacing**
 3. **Entra a una sesión** (práctica, carrera, etc.)
 4. El overlay se conectará automáticamente y mostrará datos reales
+
+## ✨ Nuevas características (v1.1)
+
+### ✅ Parsing real de SessionInfo YAML
+- Nombres de pilotos reales
+- iRatings reales
+- Safety Ratings reales
+- Números de coche reales
+- Nombre de la serie
+- Detección de marcas de coche
+
+### ✅ Sistema inteligente de visualización relativa
+- Ajuste automático cuando vas en primeras posiciones
+- Ajuste automático cuando vas en últimas posiciones
+- Siempre muestra el máximo de información disponible
+
+### ✅ Cálculo real de SOF
+- Basado en iRatings reales de todos los pilotos
+- Actualización en tiempo real
+
+### ✅ Proyección de iRating precisa
+- Algoritmo ELO adaptado a iRacing
+- Muestra ganancia/pérdida esperada según posición actual
+
+## 📊 Actualización de datos
+
+- **Telemetría**: 60 Hz
+- **Relative**: ~60 Hz
+- **SessionInfo**: Solo cuando iRacing lo actualiza (cambio de sesión, nuevos pilotos, etc.)
 
 ## 🗂️ Estructura del Proyecto
 
@@ -126,7 +180,8 @@ iracing_overlay_cpp/
 │   │   ├── relative_calc.*   # Cálculos relativo + parsing
 │   │   └── irating_calc.*    # Proyección iRating
 │   └── utils/
-│       └── yaml_parser.*     # Parser SessionInfo 
+│       ├── config.*          # Configuración (placeholder)
+│       └── yaml_parser.*     # Parser SessionInfo ✨ NUEVO
 ├── include/
 │   └── irsdk/
 │       └── irsdk_defines.h   # Headers iRacing SDK
@@ -136,11 +191,18 @@ iracing_overlay_cpp/
 │   └── glad/
 ├── assets/                   # Assets opcionales
 │   └── car_brands/           # Logos PNG
-├── .gitignore                # 
+├── .gitignore                # ✨ NUEVO
 ├── CMakeLists.txt            # Build system actualizado
 ├── build.bat                 # Script compilación
 └── README.md                 # Esta documentación
 ```
+
+## 🔧 Dependencias
+
+- **Dear ImGui** 1.90.1 - UI framework
+- **GLFW** 3.3.8 - Window management
+- **GLAD** - OpenGL loader
+- **iRacing SDK** - Official telemetry API
 
 ## 🎨 Assets Opcionales
 
@@ -160,9 +222,50 @@ assets/car_brands/
 ├── mclaren.png
 ├── ford.png
 ├── chevrolet.png
-├── toyota.png          
-└── mazda.png           
+├── toyota.png          ✨ NUEVO
+└── mazda.png           ✨ NUEVO
 ```
+
+**Nota**: Si no existen los assets, el overlay funcionará igual pero mostrará `[marca]` en texto.
+
+## 🐛 Cambios en v1.1
+
+### Bugs corregidos:
+1. ✅ **Fix getRelative()**: Ahora muestra correctamente cuando vas P1-P3
+2. ✅ **Datos reales**: Ya no son placeholders, lee SessionInfo YAML
+3. ✅ **Toyota y Mazda**: Añadidos al mapa de marcas
+
+### Mejoras:
+1. ✅ Parser YAML propio (no necesita librerías externas)
+2. ✅ Caché de SessionInfo (solo parsea cuando cambia)
+3. ✅ SOF calculado con iRatings reales
+4. ✅ .gitignore añadido
+
+## 📝 Notas sobre iRacing SDK
+
+### SessionInfo YAML
+iRacing provee información de sesión en formato YAML a través de `getSessionInfo()`. El parser incluido extrae:
+- `WeekendInfo`: Nombre de serie, track
+- `DriverInfo`: Lista de pilotos con iRating, License, nombres, números de coche
+- `SessionInfo`: Laps, tiempo de sesión
+
+### Variables telemetría
+Acceso directo vía memoria compartida a ~300 variables en tiempo real.
+
+## ⚠️ Limitaciones conocidas
+
+1. **Car logos**: Necesitas los PNG manualmente (no incluidos por copyright)
+2. **Car class**: Aún no parseado del SessionInfo (muestra "GT3" hardcoded)
+3. **Config system**: No implementado (usa defaults)
+
+## 🚀 Roadmap
+
+- [ ] Cargar texturas de logos de PNG
+- [ ] Parsear car class del SessionInfo
+- [ ] Sistema de configuración persistente (INI/JSON)
+- [ ] Widget de inputs (steering, throttle, brake)
+- [ ] Widget de fuel/tire calculator
+- [ ] Modo "ghost" (click-through)
 
 ## ⚠️ Disclaimer
 
@@ -173,3 +276,7 @@ No modifica archivos del juego ni usa memory injection.
 ## 📜 Licencia
 
 MIT License - Libre para uso personal y comercial
+
+---
+
+**Made with ❤️ for the iRacing community**
