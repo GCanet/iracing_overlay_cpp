@@ -34,6 +34,24 @@ OverlayWindow::~OverlayWindow() {
 }
 
 bool OverlayWindow::initialize() {
+#ifdef _WIN32
+    // =========================================================
+    // CONSOLE: Allocate a console window for debug output
+    // This ensures std::cout / std::cerr always have somewhere to go,
+    // regardless of WIN32_EXECUTABLE setting.
+    // =========================================================
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+        AllocConsole();
+    }
+    // Redirect stdout/stderr to the console
+    FILE* fp = nullptr;
+    freopen_s(&fp, "CONOUT$", "w", stdout);
+    freopen_s(&fp, "CONOUT$", "w", stderr);
+    freopen_s(&fp, "CONIN$", "r", stdin);
+    std::cout.clear();
+    std::cerr.clear();
+#endif
+
     // Initialize GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -48,6 +66,8 @@ bool OverlayWindow::initialize() {
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    // Start hidden so we can set up attributes before showing
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
     // Create window
     m_window = glfwCreateWindow(m_windowWidth, m_windowHeight, "iRacing Overlay", nullptr, nullptr);
@@ -73,9 +93,7 @@ bool OverlayWindow::initialize() {
     // Load config
     utils::Config::load("config.ini");
     m_globalAlpha = utils::Config::getGlobalAlpha();
-
-    // Apply Windows-specific attributes BEFORE showing window
-    applyWindowAttributes();
+    m_editMode = !utils::Config::isClickThrough(); // clickThrough=true → locked → editMode=false
 
     // Setup ImGui
     setupImGui();
@@ -89,6 +107,9 @@ bool OverlayWindow::initialize() {
     m_relativeWidget = std::make_unique<RelativeWidget>(this);
     m_telemetryWidget = std::make_unique<TelemetryWidget>(this);
 
+    // Apply Windows-specific attributes BEFORE showing window
+    applyWindowAttributes();
+
     // Clear background frames (transparency)
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -101,13 +122,15 @@ bool OverlayWindow::initialize() {
 
     m_running = true;
 
-    std::cout << "✅ Overlay initialized successfully!" << std::endl;
+    std::cout << "============================================" << std::endl;
+    std::cout << "  iRacing Overlay initialized successfully!" << std::endl;
+    std::cout << "============================================" << std::endl;
     std::cout << "Controls:" << std::endl;
     std::cout << "  Q      - Quit" << std::endl;
     std::cout << "  L      - Toggle Lock (Edit/Locked mode)" << std::endl;
     std::cout << "  Drag   - Move widgets (when unlocked)" << std::endl;
     std::cout << std::endl;
-    std::cout << "Status: " << (m_editMode ? "🔓 EDIT MODE" : "🔒 LOCKED") << std::endl;
+    std::cout << "Status: " << (m_editMode ? "EDIT MODE" : "LOCKED") << std::endl;
 
     return true;
 }
@@ -142,7 +165,7 @@ void OverlayWindow::applyWindowAttributes() {
         return;
     }
 
-    // Extend frame into client area (para transparencia completa)
+    // Extend frame into client area (for full transparency)
     MARGINS margins = { -1, -1, -1, -1 };
     DwmExtendFrameIntoClientArea(hwnd, &margins);
 
@@ -152,19 +175,31 @@ void OverlayWindow::applyWindowAttributes() {
     // Always set LAYERED and TOPMOST
     exStyle |= WS_EX_LAYERED | WS_EX_TOPMOST;
 
-    // Set TRANSPARENT only when locked (not in edit mode)
-    if (!m_editMode) {
-        exStyle |= WS_EX_TRANSPARENT;
-    } else {
+    if (m_editMode) {
+        // =====================================================
+        // EDIT MODE (UNLOCKED):
+        // - Remove WS_EX_TRANSPARENT so the window CAN receive input
+        // - Use LWA_COLORKEY with pure black (RGB 0,0,0) so that
+        //   transparent background pixels are click-through,
+        //   but opaque widget pixels remain clickable.
+        // =====================================================
         exStyle &= ~WS_EX_TRANSPARENT;
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+        // ColorKey = pure black → transparent black areas are click-through
+        SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    } else {
+        // =====================================================
+        // LOCKED MODE:
+        // - Set WS_EX_TRANSPARENT so entire window is click-through
+        // - Use LWA_ALPHA for global opacity control
+        // =====================================================
+        exStyle |= WS_EX_TRANSPARENT;
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+        BYTE alphaByte = static_cast<BYTE>(m_globalAlpha * 255);
+        SetLayeredWindowAttributes(hwnd, 0, alphaByte, LWA_ALPHA);
     }
-
-    // Apply extended style
-    SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-
-    // Set alpha (layered window attribute)
-    BYTE alphaByte = static_cast<BYTE>(m_globalAlpha * 255);
-    SetLayeredWindowAttributes(hwnd, 0, alphaByte, LWA_ALPHA);
 
     // CRITICAL: Force window to stay on top
     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
@@ -178,8 +213,8 @@ void OverlayWindow::toggleEditMode() {
     m_editMode = !m_editMode;
     applyWindowAttributes(); // Re-apply window attributes to update click-through
     
-    std::cout << (m_editMode ? 
-        "🔓 EDIT MODE - You can drag widgets" : "🔒 LOCKED - Click-through enabled") << std::endl;
+    std::cout << (m_editMode ?
+        "EDIT MODE - You can drag widgets" : "LOCKED - Click-through enabled") << std::endl;
 }
 
 void OverlayWindow::run() {
@@ -189,14 +224,14 @@ void OverlayWindow::run() {
 
         // Update iRacing data
         if (m_sdk) {
-            // Intentar conectar si no está conectado
+            // Try to connect if not connected
             if (!m_sdk->isConnected()) {
                 m_sdk->startup();
             }
             
-            // Esperar y procesar nuevos datos (waitForData reemplaza update)
+            // Wait and process new data
             if (m_sdk->waitForData(16)) {
-                // Nuevos datos disponibles, actualizar relative
+                // New data available, update relative
                 if (m_sdk->isSessionActive()) {
                     m_relative->update();
                 }
@@ -213,13 +248,15 @@ void OverlayWindow::renderFrame() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // Render widgets
-    if (m_sdk && m_sdk->isSessionActive()) {
-        m_relativeWidget->render(m_relative.get(), m_editMode);
-        m_telemetryWidget->render(m_sdk.get(), m_editMode);
-    }
+    // =========================================================
+    // ALWAYS render widgets — each widget's render() method
+    // already has its own guard (checks sdk/session internally).
+    // This ensures they draw whenever data is available.
+    // =========================================================
+    m_relativeWidget->render(m_relative.get(), m_editMode);
+    m_telemetryWidget->render(m_sdk.get(), m_editMode);
 
-    // Indicator de estado en esquina superior izquierda
+    // Status indicator in top-left corner
     {
         ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.5f);
@@ -233,10 +270,10 @@ void OverlayWindow::renderFrame() {
 
         ImGui::Begin("##Status", nullptr, flags);
         if (m_editMode) {
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "🔓 EDIT MODE");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "EDIT MODE");
             ImGui::Text("Press L to lock");
         } else {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "🔒 LOCKED");
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "LOCKED");
         }
         ImGui::End();
     }
@@ -286,9 +323,15 @@ void OverlayWindow::shutdown() {
     if (m_sdk) {
         m_sdk->shutdown();
     }
+
+#ifdef _WIN32
+    FreeConsole();
+#endif
 }
 
 void OverlayWindow::saveConfigOnExit() {
+    utils::Config::setClickThrough(!m_editMode);
+    utils::Config::setGlobalAlpha(m_globalAlpha);
     utils::Config::save("config.ini");
     std::cout << "Config saved." << std::endl;
 }
