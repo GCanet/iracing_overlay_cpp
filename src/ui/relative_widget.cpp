@@ -22,8 +22,8 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative) {
     
     // Window position from config (or default)
     if (config.posX < 0 || config.posY < 0) {
-        // First use - top right default
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 520, 20), ImGuiCond_FirstUseEver);
+        // First use - top left corner
+        ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
     } else {
         // Use saved position, but only set it once per frame to allow dragging
         ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);

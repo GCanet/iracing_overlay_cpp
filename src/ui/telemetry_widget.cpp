@@ -21,47 +21,51 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
     // Load config
     auto& config = utils::Config::getTelemetryConfig();
     
+    // Fixed size always
+    float windowWidth = GRAPH_WIDTH + 20;
+    float windowHeight = GRAPH_HEIGHT + 40;
+    ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Always);
+    
     // Window position from config (or default)
     if (config.posX < 0 || config.posY < 0) {
-        // First use - bottom right default
-        ImGui::SetNextWindowPos(
-            ImVec2(ImGui::GetIO().DisplaySize.x - 340, 
-                   ImGui::GetIO().DisplaySize.y - 120), 
-            ImGuiCond_FirstUseEver
-        );
+        // First use - horizontal center, 20% up from bottom
+        float x = (ImGui::GetIO().DisplaySize.x - windowWidth) / 2.0f;
+        float y = ImGui::GetIO().DisplaySize.y * 0.8f - windowHeight;
+        ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_FirstUseEver);
     } else {
-        ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Always);
-    }
-    
-    // Window size from config
-    if (config.width > 0 && config.height > 0) {
-        ImGui::SetNextWindowSize(ImVec2(config.width, config.height), ImGuiCond_Always);
-    } else {
-        ImGui::SetNextWindowSize(ImVec2(320, 100), ImGuiCond_FirstUseEver);
+        // Use saved position
+        ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
     }
     
     // Window alpha from config
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
     
-    // Single window with no title bar, just the graphs
-    ImGui::Begin("##TELEMETRY", nullptr, 
-        ImGuiWindowFlags_NoCollapse | 
-        ImGuiWindowFlags_NoTitleBar);
+    // Window flags - allow moving when not click-through, but never resize
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | 
+                             ImGuiWindowFlags_NoTitleBar | 
+                             ImGuiWindowFlags_NoResize;
     
-    // Save position and size back to config
+    // Check if we're in click-through mode
+    bool isLocked = utils::Config::isClickThrough();
+    if (isLocked) {
+        flags |= ImGuiWindowFlags_NoMove;
+    }
+    
+    ImGui::Begin("##TELEMETRY", nullptr, flags);
+    
+    // Save position back to config (will update as user drags)
     ImVec2 pos = ImGui::GetWindowPos();
-    ImVec2 size = ImGui::GetWindowSize();
     config.posX = pos.x;
     config.posY = pos.y;
-    config.width = size.x;
-    config.height = size.y;
+    config.width = windowWidth;
+    config.height = windowHeight;
     
     // Get the draw list and canvas position
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
     ImVec2 canvas_size(GRAPH_WIDTH, GRAPH_HEIGHT);
     
-    // Render BOTH graphs in the SAME box
+    // Render BOTH graphs in the SAME box (moving from RIGHT to LEFT)
     if (!m_throttleHistory.empty() && !m_brakeHistory.empty()) {
         // Pre-calculated colors
         ImU32 bg_color = IM_COL32(20, 20, 20, 180);
@@ -76,22 +80,28 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
             bg_color
         );
         
-        // Draw THROTTLE line
-        float step = canvas_size.x / static_cast<float>(m_throttleHistory.size());
+        // Draw THROTTLE line (RIGHT TO LEFT)
+        float step = canvas_size.x / static_cast<float>(m_throttleHistory.size() - 1);
         
         draw_list->PathClear();
         for (size_t i = 0; i < m_throttleHistory.size(); i++) {
-            float x = canvas_pos.x + i * step;
-            float y = canvas_pos.y + canvas_size.y * (1.0f - m_throttleHistory[i]);
+            // Start from RIGHT (canvas_pos.x + canvas_size.x) and go LEFT
+            float x = canvas_pos.x + canvas_size.x - (i * step);
+            // Get value from most recent (end of deque) to oldest (start of deque)
+            size_t dataIndex = m_throttleHistory.size() - 1 - i;
+            float y = canvas_pos.y + canvas_size.y * (1.0f - m_throttleHistory[dataIndex]);
             draw_list->PathLineTo(ImVec2(x, y));
         }
         draw_list->PathStroke(throttle_color, 0, 2.0f);
         
-        // Draw BRAKE line (same graph)
+        // Draw BRAKE line (RIGHT TO LEFT, same graph)
         draw_list->PathClear();
         for (size_t i = 0; i < m_brakeHistory.size(); i++) {
-            float x = canvas_pos.x + i * step;
-            float y = canvas_pos.y + canvas_size.y * (1.0f - m_brakeHistory[i]);
+            // Start from RIGHT and go LEFT
+            float x = canvas_pos.x + canvas_size.x - (i * step);
+            // Get value from most recent to oldest
+            size_t dataIndex = m_brakeHistory.size() - 1 - i;
+            float y = canvas_pos.y + canvas_size.y * (1.0f - m_brakeHistory[dataIndex]);
             draw_list->PathLineTo(ImVec2(x, y));
         }
         draw_list->PathStroke(brake_color, 0, 2.0f);
@@ -103,17 +113,7 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk) {
             border_color
         );
         
-        // Labels inside the graph (top corners)
-        draw_list->AddText(
-            ImVec2(canvas_pos.x + 5, canvas_pos.y + 5),
-            throttle_color,
-            "T"
-        );
-        draw_list->AddText(
-            ImVec2(canvas_pos.x + canvas_size.x - 15, canvas_pos.y + 5),
-            brake_color,
-            "B"
-        );
+        // NO T/B LABELS - removed as requested
     }
     
     // Reserve space for the graph

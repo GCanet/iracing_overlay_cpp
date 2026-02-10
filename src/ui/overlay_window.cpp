@@ -37,7 +37,7 @@ namespace ui {
 OverlayWindow::OverlayWindow()
     : m_window(nullptr)
     , m_running(false)
-    , m_clickThrough(false)
+    , m_clickThrough(true)  // Start locked by default
     , m_lockKeyPressed(false)
     , m_windowWidth(1920)
     , m_windowHeight(1080)
@@ -103,8 +103,12 @@ bool OverlayWindow::initialize() {
     // Load config BEFORE applying window attributes
     utils::Config::load("config.ini");
     
-    // Check if we should start locked
+    // Check if we should start locked (default to true if not in config)
     m_clickThrough = utils::Config::isClickThrough();
+    if (!m_clickThrough) {
+        // Config says unlocked, but we default to locked on first run
+        // Only unlock if explicitly saved as unlocked
+    }
     
     // Apply Windows-specific overlay attributes
     updateWindowAttributes();
@@ -275,33 +279,37 @@ void OverlayWindow::renderFrame() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     
-    // Show lock status indicator
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.7f);
-    ImGui::Begin("##LockStatus", nullptr, 
-        ImGuiWindowFlags_NoResize | 
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_AlwaysAutoResize |
-        ImGuiWindowFlags_NoFocusOnAppearing);
-    
-    if (m_clickThrough) {
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "🔒 LOCKED");
-        ImGui::Text("Press L to unlock");
-    } else {
+    // Show lock status indicator ONLY when unlocked, at bottom right
+    if (!m_clickThrough) {
+        ImGui::SetNextWindowPos(
+            ImVec2(ImGui::GetIO().DisplaySize.x - 220, 
+                   ImGui::GetIO().DisplaySize.y - 110), 
+            ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.5f);  // 50% translucent when unlocked
+        ImGui::Begin("##LockStatus", nullptr, 
+            ImGuiWindowFlags_NoResize | 
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoFocusOnAppearing);
+        
         ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "🔓 UNLOCKED");
         ImGui::Text("Drag widgets to move");
         ImGui::Text("Press L to lock");
+        
+        ImGui::End();
     }
-    ImGui::End();
     
     // Render widgets or connection status
     if (m_sdk->isConnected()) {
         m_relativeWidget->render(m_relative.get());
         m_telemetryWidget->render(m_sdk.get());
     } else {
-        // Show connection status
-        ImGui::SetNextWindowPos(ImVec2(10, 100), ImGuiCond_Always);
+        // Show connection status - bottom right when not connected
+        ImGui::SetNextWindowPos(
+            ImVec2(ImGui::GetIO().DisplaySize.x - 420, 
+                   ImGui::GetIO().DisplaySize.y - 210), 
+            ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.8f);
         ImGui::Begin("##Status", nullptr, 
             ImGuiWindowFlags_NoResize | 
@@ -311,12 +319,12 @@ void OverlayWindow::renderFrame() {
             ImGuiWindowFlags_NoFocusOnAppearing);
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "⏳ Waiting for iRacing...");
         ImGui::Separator();
-        ImGui::TextWrapped("Make sure iRacing is running and you're in a session (not menus)");
+        ImGui::TextWrapped("Make sure iRacing is running and you're in a session");
         ImGui::Text(" ");
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Troubleshooting:");
         ImGui::BulletText("Start a Test Drive session");
         ImGui::BulletText("Go to Options → Enable SDK");
-        ImGui::BulletText("Restart the overlay after starting iRacing");
+        ImGui::BulletText("Restart overlay after starting iRacing");
         ImGui::End();
     }
     
