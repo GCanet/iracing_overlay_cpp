@@ -15,32 +15,28 @@ Overlay profesional de alto rendimiento para iRacing con consumo mínimo de recu
 
 - **ESC**: Toggle demo window (para testear)
 - **Q**: Salir
-- **Click derecho** en widgets: Configuración
 - **Drag**: Mover ventanas
 
-## 📊 Widgets Disponibles
 
-### Relativo
-- Posiciones arriba/abajo del jugador
-- Gap en tiempo real
-- iRating de cada piloto
-- Última vuelta
-- Indicador de pits
 
-### Telemetría
-- Gráfico throttle (verde)
-- Gráfico brake (rojo)
-- Velocidad actual
-- Historial últimos 3 segundos
 
-## ⚙️ Configuración
 
-### Personalizar Rango Relativo  ## CAMBIAR ESTO A QUE MUESTRE x-JUGADOR-x // nada de toggle para irating
+### TO DO:
 
-Click derecho en ventana "RELATIVE":
-- **Ahead**: Coches por delante (1-10)
-- **Behind**: Coches por detrás (1-10)
-- **Show iRating**: Toggle mostrar iRating
+1. CAMBIAR EL RELATIVO A QUE MUESTRE BASADO EN 4 COCHES POR DELANTE Y POR DETRAS DEL PILOTO Y NADA DE SHOW IRATING, AHEAD Y BEHIND, NI DE CLICKS DERECHOS EN VENTANA RELATIVE, TIENE QUE ESTAR TODO EN UNA FILA:
+
+posicion | numero piloto + nombre | nacionalidad | logo marca coche | safety rating | irating | proyeccion irating carrera en curso | tiempo ultima vuelta | gap de distancia según posicion del piloto
+
+2. Indicador de pits ## no se necesita indicador de pits
+
+3. Velocidad actual ## no se necesita velocidad actual
+   
+4. **Click derecho** en widgets: Configuración ## quitar esta funcion
+
+
+
+
+
 
 ### Posición de Ventanas
 
@@ -83,6 +79,7 @@ iracing_overlay_cpp/
 
 ### v1.1 (Próximo)
 - [ ] Sistema de skins (Trading Paints style)
+- [ ] Añadir crewchief
 - [ ] Configuración GUI completa
 - [ ] Web API integration (iRating real)
 
