@@ -25,12 +25,13 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative) {
         // First use - top right default
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 520, 20), ImGuiCond_FirstUseEver);
     } else {
-        ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Always);
+        // Use saved position, but only set it once per frame to allow dragging
+        ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
     }
     
     // Window size from config
     if (config.width > 0 && config.height > 0) {
-        ImGui::SetNextWindowSize(ImVec2(config.width, config.height), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(config.width, config.height), ImGuiCond_Once);
     } else {
         ImGui::SetNextWindowSize(ImVec2(500, 0), ImGuiCond_FirstUseEver);
     }
@@ -38,11 +39,18 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative) {
     // Window alpha from config
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
     
-    ImGui::Begin("##RELATIVE", nullptr, 
-        ImGuiWindowFlags_NoCollapse | 
-        ImGuiWindowFlags_NoTitleBar);
+    // Window flags - allow moving when not click-through
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
     
-    // Save position and size back to config
+    // Check if we're in click-through mode (from global config)
+    bool isLocked = utils::Config::isClickThrough();
+    if (isLocked) {
+        flags |= ImGuiWindowFlags_NoMove;  // Can't move when locked
+    }
+    
+    ImGui::Begin("##RELATIVE", nullptr, flags);
+    
+    // Save position and size back to config (will update as user drags)
     ImVec2 pos = ImGui::GetWindowPos();
     ImVec2 size = ImGui::GetWindowSize();
     config.posX = pos.x;
