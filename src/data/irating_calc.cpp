@@ -5,7 +5,7 @@
 
 namespace iracing {
 
-int IRatingCalculator::calculateSOF(const std::vector<int>& iRatings) {
+int iRatingCalculator::calculateSOF(const std::vector<int>& iRatings) {
     if (iRatings.empty()) return 0;
     
     double sum = 0.0;
@@ -15,7 +15,7 @@ int IRatingCalculator::calculateSOF(const std::vector<int>& iRatings) {
     return static_cast<int>(std::round(sum / iRatings.size()));
 }
 
-int IRatingCalculator::calculateDelta(int myIR, int sof, int position, int totalDrivers) {
+int iRatingCalculator::calculateDelta(int myIR, int sof, int position, int totalDrivers) {
     if (totalDrivers <= 1) return 0;
     
     // Very simple but realistic projection:
