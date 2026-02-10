@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# MSVC runtime - set BEFORE any targets are created
+# Use static CRT to avoid runtime DLL dependencies
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 # Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -41,7 +45,7 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        v1.92.5  # or docking branch if needed: GIT_TAG docking
+    GIT_TAG        v1.92.5
 )
 FetchContent_MakeAvailable(imgui)
 
@@ -50,7 +54,6 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    # ${imgui_SOURCE_DIR}/imgui_demo.cpp   # optional
 
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
@@ -64,10 +67,10 @@ target_link_libraries(imgui PUBLIC glfw)
 target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
 # =============================================================================
-# GLAD - Pre-generated static lib (no Python/FetchContent needed)
+# GLAD - Pre-generated static lib
 # =============================================================================
-add_library(glad STATIC src/glad.c)  # <-- assumes glad.c is in src/; change path if you put it elsewhere
-target_include_directories(glad PUBLIC include)  # points to include/glad/glad.h
+add_library(glad STATIC src/glad.c)
+target_include_directories(glad PUBLIC include)
 
 # =============================================================================
 # Main app
@@ -87,10 +90,8 @@ set(APP_SOURCES
 add_executable(iRacingOverlay ${APP_SOURCES})
 
 set_target_properties(iRacingOverlay PROPERTIES
-    WIN32_EXECUTABLE FALSE   # ← forces console subsystem (/SUBSYSTEM:CONSOLE)
+    WIN32_EXECUTABLE FALSE   # forces console subsystem (/SUBSYSTEM:CONSOLE)
 )
-
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")  # or "MultiThreadedDLL" if you prefer dynamic CRT
 
 target_include_directories(iRacingOverlay PRIVATE
     ${CMAKE_SOURCE_DIR}/include
@@ -103,6 +104,11 @@ target_link_libraries(iRacingOverlay PRIVATE
     glad
     opengl32
 )
+
+# Suppress LNK4098 warning about conflicting default libraries (LIBCMT vs MSVCRT)
+if(MSVC)
+    target_link_options(iRacingOverlay PRIVATE /NODEFAULTLIB:LIBCMT)
+endif()
 
 # Copy assets
 add_custom_command(TARGET iRacingOverlay POST_BUILD
