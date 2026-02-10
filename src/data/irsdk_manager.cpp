@@ -1,5 +1,6 @@
 #include "data/irsdk_manager.h"
 #include <cstring>
+#include <iostream>
 
 namespace iracing {
 
@@ -42,7 +43,10 @@ bool IRSDKManager::openSharedMemory() {
         IRSDK_MEMMAPFILENAME
     );
     
-    if (!m_hMemMapFile) return false;
+    if (!m_hMemMapFile) {
+        // Not an error - iRacing just isn't running yet
+        return false;
+    }
     
     // Map view
     m_pSharedMem = (const char*)MapViewOfFile(
@@ -52,12 +56,27 @@ bool IRSDKManager::openSharedMemory() {
     );
     
     if (!m_pSharedMem) {
+        std::cerr << "⚠️ Failed to map view of iRacing shared memory" << std::endl;
         CloseHandle(m_hMemMapFile);
         m_hMemMapFile = nullptr;
         return false;
     }
     
     m_pHeader = (const irsdk_header*)m_pSharedMem;
+    
+    // Verify header version
+    if (!m_pHeader) {
+        std::cerr << "⚠️ Invalid header pointer" << std::endl;
+        closeSharedMemory();
+        return false;
+    }
+    
+    if (m_pHeader->ver != 2) {
+        std::cerr << "⚠️ iRacing SDK version mismatch (expected 2, got " 
+                  << m_pHeader->ver << ")" << std::endl;
+        closeSharedMemory();
+        return false;
+    }
     
     // Open data valid event
     m_hDataValidEvent = OpenEvent(
@@ -66,7 +85,17 @@ bool IRSDKManager::openSharedMemory() {
         IRSDK_DATAVALIDEVENTNAME
     );
     
-    return m_pHeader && m_pHeader->ver == 2;
+    if (!m_hDataValidEvent) {
+        std::cerr << "⚠️ Failed to open data valid event" << std::endl;
+    }
+    
+    std::cout << "✅ iRacing SDK opened successfully" << std::endl;
+    std::cout << "   Version: " << m_pHeader->ver << std::endl;
+    std::cout << "   Tick rate: " << m_pHeader->tickRate << " Hz" << std::endl;
+    std::cout << "   Num variables: " << m_pHeader->numVars << std::endl;
+    std::cout << "   Num buffers: " << m_pHeader->numBuf << std::endl;
+    
+    return true;
 }
 
 void IRSDKManager::closeSharedMemory() {
