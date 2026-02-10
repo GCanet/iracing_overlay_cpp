@@ -5,9 +5,8 @@
 #include "data/relative_calc.h"
 #include "utils/config.h"
 
-#define GLFW_INCLUDE_NONE
-
 #include <glad/glad.h>
+#define GLFW_INCLUDE_NONE
 #ifdef APIENTRY
 #undef APIENTRY
 #include "imgui.h"
