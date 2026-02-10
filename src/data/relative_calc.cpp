@@ -151,7 +151,7 @@ std::vector<Driver> RelativeCalculator::getRelative(int ahead, int behind) {
     
     if (m_allDrivers.empty()) return relative;
     
-    // Find player position
+    // Encontrar posición del jugador
     int playerPos = -1;
     for (size_t i = 0; i < m_allDrivers.size(); i++) {
         if (m_allDrivers[i].isPlayer) {
@@ -162,11 +162,30 @@ std::vector<Driver> RelativeCalculator::getRelative(int ahead, int behind) {
     
     if (playerPos < 0) return relative;
     
-    // Get range (4 ahead, 4 behind)
-    int start = std::max(0, playerPos - behind);
-    int end = std::min(static_cast<int>(m_allDrivers.size()), playerPos + ahead + 1);
+    // NUEVA LÓGICA: Siempre intentar mostrar (ahead + 1 + behind) coches
+    const int targetTotal = ahead + 1 + behind; // Ejemplo: 4 + 1 + 4 = 9
+    const int totalDrivers = static_cast<int>(m_allDrivers.size());
     
-    for (int i = start; i < end; i++) {
+    // Calcular rango ideal
+    int idealStart = playerPos - behind;
+    int idealEnd = playerPos + ahead + 1;
+    
+    // Ajustar si nos salimos por arriba (ej: vas 1º)
+    if (idealStart < 0) {
+        int deficit = -idealStart;
+        idealStart = 0;
+        idealEnd = std::min(totalDrivers, idealEnd + deficit);
+    }
+    
+    // Ajustar si nos salimos por abajo (ej: vas último)
+    if (idealEnd > totalDrivers) {
+        int excess = idealEnd - totalDrivers;
+        idealEnd = totalDrivers;
+        idealStart = std::max(0, idealStart - excess);
+    }
+    
+    // Copiar el rango
+    for (int i = idealStart; i < idealEnd; i++) {
         relative.push_back(m_allDrivers[i]);
     }
     
@@ -210,7 +229,9 @@ std::string RelativeCalculator::getCarBrand(const std::string& carPath) {
         {"aston", "aston_martin"},
         {"mclaren", "mclaren"},
         {"ford", "ford"},
-        {"chevrolet", "chevrolet"}
+        {"chevrolet", "chevrolet"},
+        {"toyota", "toyota"}, 
+        {"mazda", "mazda"}   
     };
     
     std::string lower = carPath;
