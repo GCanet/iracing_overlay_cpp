@@ -25,7 +25,7 @@ Overlay profesional de alto rendimiento para iRacing con consumo mínimo de recu
 
 1. CAMBIAR EL RELATIVO A QUE MUESTRE BASADO EN 4 COCHES POR DELANTE Y POR DETRAS DEL PILOTO Y NADA DE SHOW IRATING, AHEAD Y BEHIND, NI DE CLICKS DERECHOS EN VENTANA RELATIVE, TIENE QUE ESTAR TODO EN UNA FILA:
 
-posicion | numero piloto + nombre | nacionalidad | logo marca coche | safety rating | irating | proyeccion irating carrera en curso | tiempo ultima vuelta | gap de distancia según posicion del piloto
+posicion | numero piloto + nombre | logo marca coche | safety rating | irating | proyeccion irating carrera en curso | tiempo ultima vuelta | gap de distancia según posicion del piloto
 
 2. Indicador de pits ## no se necesita indicador de pits
 
@@ -33,6 +33,7 @@ posicion | numero piloto + nombre | nacionalidad | logo marca coche | safety rat
    
 4. **Click derecho** en widgets: Configuración ## quitar esta funcion
 
+5. nada de banderas
 
 
 
