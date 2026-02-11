@@ -14,11 +14,11 @@ namespace iracing {
 
 struct Driver {
     int carIdx = -1;
-    int position = 0;              // CarIdxPosition (oficial del SDK)
-    int relativePosition = 0;      // Posición calculada tras orden robusto (1 = líder)
-    int lap = 0;                   // CarIdxLap (vuelta actual en curso)
-    int lapCompleted = 0;          // CarIdxLapCompleted (vueltas terminadas)
-    float lapDistPct = 0.0f;       // Porcentaje de la vuelta actual
+    int position = 0;              // CarIdxPosition (official from SDK)
+    int relativePosition = 0;      // Calculated position after robust sort (1 = leader)
+    int lap = 0;                   // CarIdxLap (current lap in progress)
+    int lapCompleted = 0;          // CarIdxLapCompleted (completed laps)
+    float lapDistPct = 0.0f;       // Percentage of current lap
     float lastLapTime = 0.0f;
     float gapToLeader = 0.0f;
     float gapToPlayer = 0.0f;
@@ -41,10 +41,10 @@ public:
     
     void update();
     
-    // Get all drivers (ya ordenados por update())
+    // Get all drivers (already sorted by update())
     const std::vector<Driver>& getAllDrivers() const { return m_allDrivers; }
     
-    // Relative alrededor del jugador (smart adjustment)
+    // Relative around the player (smart adjustment)
     std::vector<Driver> getRelative(int ahead = 4, int behind = 4) const;
     
     int getPlayerCarIdx() const { return m_playerCarIdx; }
@@ -58,6 +58,7 @@ private:
     void calculateGaps(const float* f2Times, int f2Count);
     void calculateiRatingProjections();
     std::string getCarBrand(const std::string& carPath);
+    static float parseSafetyRatingFromLicString(const std::string& licString);
     
     IRSDKManager* m_sdk;
     std::vector<Driver> m_allDrivers;
@@ -69,7 +70,7 @@ private:
     float m_sessionTime = 0.0f;
     float m_sessionTimeRemain = 0.0f;
     
-    // Caché de session string
+    // Session string cache
     int m_lastSessionInfoUpdate = -1;
     std::map<int, utils::YAMLParser::DriverInfo> m_driverInfoMap;
 };
