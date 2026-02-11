@@ -198,9 +198,9 @@ void OverlayWindow::renderFrame() {
     m_relativeWidget->render(m_relative.get(), m_editMode);
     m_telemetryWidget->render(m_sdk.get(), m_editMode);
 
-    // Status indicator in top-left corner
+    // Status indicator in top-right corner
     {
-        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 10.0f, 10.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
         ImGui::SetNextWindowBgAlpha(0.5f);
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
                                 ImGuiWindowFlags_NoMove |
