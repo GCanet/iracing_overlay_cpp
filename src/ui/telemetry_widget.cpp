@@ -43,10 +43,11 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
     // ── Compact layout: match iRacing game widget height ──
     // Row 1: RPM shift lights (thin strip)
     // Row 2: ABS | Trace | Bars | Gear+Speed | Steering (single row)
-    float rowH   = 36.0f * m_scale;       // main content row height
+    float rowH   = 42.0f * m_scale;       // main content row height (+10px)
     float rpmH   = 10.0f * m_scale;       // thin RPM strip
     float padY   = 3.0f * m_scale;
-    float totalH = rpmH + padY + rowH + padY * 2.0f;  // ~58 px at 1x
+    float gapRpm = 1.0f * m_scale;        // halved gap between RPM and content
+    float totalH = rpmH + gapRpm + rowH + padY * 2.0f;
     float totalW = 480.0f * m_scale;
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
@@ -83,16 +84,18 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
     // ── Row 1: RPM shift lights (full width, thin) ─────────
     renderShiftLights(contentW, rpmH);
 
-    ImGui::Spacing();
+    ImGui::Dummy(ImVec2(0, gapRpm));   // halved gap between RPM and content row
 
     // ── Row 2: All elements in one horizontal lane ──────────
     // Sizes for each element
     float absW    = rowH;              // square
-    float traceW  = contentW * 0.42f;  // biggest chunk
     float barsW   = 30.0f * m_scale;   // 3 thin bars
     float gearW   = 44.0f * m_scale;   // gear + speed stacked
     float steerW  = rowH;              // square
     float gap     = 4.0f * m_scale;    // spacing between elements
+
+    // Trace gets all remaining width (no dead space on the right)
+    float traceW  = contentW - absW - barsW - gearW - steerW - gap * 4.0f;
 
     // ABS
     renderABSIndicator(absW, rowH);
@@ -207,10 +210,11 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
     float rpmPct = (m_maxRPM > 0) ? std::min(m_currentRPM / m_maxRPM, 1.0f) : 0.0f;
-    int numLights = 13;
+    int numLights = 10;
     float gap = 2.0f * m_scale;
     float lightW = (width - (numLights - 1) * gap) / numLights;
-    int activeLights = (int)(rpmPct * numLights);
+    // +1 so that rpmPct==1.0 lights ALL squares (ceil behavior)
+    int activeLights = (int)(rpmPct * numLights + 0.5f);
 
     for (int i = 0; i < numLights; i++) {
         float x = p.x + i * (lightW + gap);
