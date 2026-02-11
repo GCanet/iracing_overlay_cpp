@@ -6,19 +6,15 @@
 #include <string>
 #include <map>
 
-namespace utils {
-    struct YAMLParser;
-}
-
 namespace iracing {
 
 struct Driver {
     int carIdx = -1;
-    int position = 0;              // CarIdxPosition (official from SDK)
-    int relativePosition = 0;      // Calculated position after robust sort (1 = leader)
-    int lap = 0;                   // CarIdxLap (current lap in progress)
-    int lapCompleted = 0;          // CarIdxLapCompleted (completed laps)
-    float lapDistPct = 0.0f;       // Percentage of current lap
+    int position = 0;
+    int relativePosition = 0;
+    int lap = 0;
+    int lapCompleted = 0;
+    float lapDistPct = 0.0f;
     float lastLapTime = 0.0f;
     float gapToLeader = 0.0f;
     float gapToPlayer = 0.0f;
@@ -28,6 +24,7 @@ struct Driver {
     std::string driverName;
     std::string carClass;
     std::string carBrand;
+    std::string countryCode;
     int iRating = 1500;
     float safetyRating = 2.5f;
     int iRatingProjection = 0;
@@ -38,20 +35,22 @@ class IRSDKManager;
 class RelativeCalculator {
 public:
     RelativeCalculator(IRSDKManager* sdk);
-    
+
     void update();
-    
-    // Get all drivers (already sorted by update())
+
     const std::vector<Driver>& getAllDrivers() const { return m_allDrivers; }
-    
-    // Relative around the player (smart adjustment)
     std::vector<Driver> getRelative(int ahead = 4, int behind = 4) const;
-    
+
     int getPlayerCarIdx() const { return m_playerCarIdx; }
-    
+
     std::string getSeriesName() const;
     std::string getLapInfo() const;
     int getSOF() const;
+
+    // Player stats for footer
+    int getPlayerIncidents() const { return m_playerIncidents; }
+    float getPlayerLastLap() const { return m_playerLastLap; }
+    float getPlayerBestLap() const { return m_playerBestLap; }
 
 private:
     void updateSessionInfo();
@@ -59,7 +58,7 @@ private:
     void calculateiRatingProjections();
     std::string getCarBrand(const std::string& carPath);
     static float parseSafetyRatingFromLicString(const std::string& licString);
-    
+
     IRSDKManager* m_sdk;
     std::vector<Driver> m_allDrivers;
     int m_playerCarIdx = -1;
@@ -69,8 +68,12 @@ private:
     int m_totalLaps = 0;
     float m_sessionTime = 0.0f;
     float m_sessionTimeRemain = 0.0f;
-    
-    // Session string cache
+
+    // Player stats
+    int m_playerIncidents = 0;
+    float m_playerLastLap = -1.0f;
+    float m_playerBestLap = -1.0f;
+
     int m_lastSessionInfoUpdate = -1;
     std::map<int, utils::YAMLParser::DriverInfo> m_driverInfoMap;
 };
