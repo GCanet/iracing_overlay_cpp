@@ -1,10 +1,7 @@
-// irsdk_manager.h
 #ifndef IRSDK_MANAGER_H
 #define IRSDK_MANAGER_H
 
 #include <windows.h>
-#include <cstddef>
-#include <cstdint>
 #include "irsdk/irsdk_defines.h"
 
 namespace iracing {
@@ -19,42 +16,43 @@ public:
     void shutdown();
     bool isConnected() const;
     bool isSessionActive() const;
-
+    
     // Data access
     bool waitForData(int timeoutMS = 16);
-
+    
     // Get values
-    template <typename T>
-    T getVar(const char* name, T defaultValue = T());
-
-    float getFloat(const char* name, float defaultValue = 0.0f);
-    int getInt(const char* name, int defaultValue = 0);
-    bool getBool(const char* name, bool defaultValue = false);
-
+    float getFloat(const char* name, float defaultValue = 0.0f) const;
+    int getInt(const char* name, int defaultValue = 0) const;
+    bool getBool(const char* name, bool defaultValue = false) const;
+    
     // Array access
-    const float* getFloatArray(const char* name, int& count);
-    const int* getIntArray(const char* name, int& count);
-
+    const float* getFloatArray(const char* name, int& count) const;
+    const int* getIntArray(const char* name, int& count) const;
+    
     // Session info
-    const char* getSessionInfo();
+    const char* getSessionInfo() const;
     int getSessionInfoUpdate() const;
+
+    // Generic template (kept for future use)
+    template<typename T>
+    T getVar(const char* name, T defaultValue = T());
 
 private:
     bool openSharedMemory();
     void closeSharedMemory();
-    const irsdk_varHeader* getVarHeader(const char* name);
     void updateLatestBufferIndex();
     int getLatestTickCount() const;
     const char* getDataPtr() const;
-
-    HANDLE m_hMemMapFile = nullptr;
-    HANDLE m_hDataValidEvent = nullptr;
-    const irsdk_header* m_pHeader = nullptr;
-    const char* m_pSharedMem = nullptr;
-    bool m_connected = false;
-    int m_lastTickCount = -1;
-    int m_latestBufIndex = -1;
-    int m_sessionInfoUpdate = 0;
+    const irsdk_varHeader* getVarHeader(const char* name) const;
+    
+    HANDLE m_hMemMapFile;
+    HANDLE m_hDataValidEvent;
+    const irsdk_header* m_pHeader;
+    const char* m_pSharedMem;
+    bool m_connected;
+    int m_lastTickCount;
+    int m_latestBufIndex;
+    int m_sessionInfoUpdate;
 };
 
 } // namespace iracing
