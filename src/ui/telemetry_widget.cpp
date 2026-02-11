@@ -1,7 +1,8 @@
 #include "telemetry_widget.h"
 #include <algorithm>
 #include <imgui.h>
-#include "../utils/config.h"        // adjust path if your project structure is different
+#include "../utils/config.h"
+#include "../data/irsdk_manager.h" // adjust path if your project structure is different
 
 namespace ui {
 
