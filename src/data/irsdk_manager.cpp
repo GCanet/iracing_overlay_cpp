@@ -2,6 +2,7 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>  // std::max
+#include <iomanip>    // std::hex
 
 namespace iracing {
 
@@ -27,7 +28,7 @@ bool IRSDKManager::startup() {
     }
 
     if (m_connected) {
-        std::cout << "iRacing session ended, reconnecting...\n";
+        std::cout << "[IRSDK] iRacing session ended, reconnecting...\n";
         closeSharedMemory();
         m_connected = false;
         m_lastTickCount = -1;
@@ -58,17 +59,46 @@ bool IRSDKManager::isSessionActive() const {
 
 bool IRSDKManager::openSharedMemory() {
     m_hMemMapFile = OpenFileMapping(FILE_MAP_READ, FALSE, IRSDK_MEMMAPFILENAME);
-    if (!m_hMemMapFile) return false;
+    if (!m_hMemMapFile) {
+        // Not an error during normal polling before iRacing starts
+        return false;
+    }
 
     m_pSharedMem = (const char*)MapViewOfFile(m_hMemMapFile, FILE_MAP_READ, 0, 0, 0);
     if (!m_pSharedMem) {
+        std::cerr << "[IRSDK] MapViewOfFile failed\n";
         CloseHandle(m_hMemMapFile);
         m_hMemMapFile = nullptr;
         return false;
     }
 
     m_pHeader = (const irsdk_header*)m_pSharedMem;
-    if (!m_pHeader || m_pHeader->ver != 2) {
+
+    // ── Diagnostic: print header layout ──────────────────────
+    std::cout << "[IRSDK] ============ CONNECT ============\n";
+    std::cout << "[IRSDK] sizeof(irsdk_header)    = " << sizeof(irsdk_header)    << " bytes\n";
+    std::cout << "[IRSDK] sizeof(irsdk_varBuf)    = " << sizeof(irsdk_varBuf)    << " bytes\n";
+    std::cout << "[IRSDK] sizeof(irsdk_varHeader) = " << sizeof(irsdk_varHeader) << " bytes\n";
+    std::cout << "[IRSDK] Header version           = " << m_pHeader->ver         << "\n";
+    std::cout << "[IRSDK] Header status             = " << m_pHeader->status      << "\n";
+    std::cout << "[IRSDK] Header tickRate           = " << m_pHeader->tickRate    << "\n";
+    std::cout << "[IRSDK] numVars                   = " << m_pHeader->numVars     << "\n";
+    std::cout << "[IRSDK] varHeaderOffset            = " << m_pHeader->varHeaderOffset << "\n";
+    std::cout << "[IRSDK] numBuf                    = " << m_pHeader->numBuf      << "\n";
+    std::cout << "[IRSDK] bufLen                    = " << m_pHeader->bufLen      << "\n";
+    std::cout << "[IRSDK] sessionInfoUpdate         = " << m_pHeader->sessionInfoUpdate << "\n";
+    std::cout << "[IRSDK] sessionInfoLen            = " << m_pHeader->sessionInfoLen    << "\n";
+    std::cout << "[IRSDK] sessionInfoOffset         = " << m_pHeader->sessionInfoOffset << "\n";
+
+    for (int i = 0; i < std::min(m_pHeader->numBuf, (int)IRSDK_MAX_BUFS); ++i) {
+        std::cout << "[IRSDK]   varBuf[" << i << "]  tickCount=" 
+                  << m_pHeader->varBuf[i].tickCount
+                  << "  bufOffset=" << m_pHeader->varBuf[i].bufOffset << "\n";
+    }
+
+    // ── Version check ────────────────────────────────────────
+    if (!m_pHeader || m_pHeader->ver < 1) {
+        std::cerr << "[IRSDK] Unsupported header version: " << (m_pHeader ? m_pHeader->ver : -1) << "\n";
         UnmapViewOfFile(m_pSharedMem);
         CloseHandle(m_hMemMapFile);
         m_pSharedMem = nullptr;
@@ -77,9 +107,19 @@ bool IRSDKManager::openSharedMemory() {
         return false;
     }
 
+    // ── Sanity check: numBuf should be 1-4, bufLen > 0, varHeaderOffset > 0 ──
+    if (m_pHeader->numBuf < 1 || m_pHeader->numBuf > IRSDK_MAX_BUFS) {
+        std::cerr << "[IRSDK] WARNING: numBuf=" << m_pHeader->numBuf << " looks wrong (expected 1-4)\n";
+    }
+    if (m_pHeader->bufLen <= 0) {
+        std::cerr << "[IRSDK] WARNING: bufLen=" << m_pHeader->bufLen << " looks wrong\n";
+    }
+    if (m_pHeader->varHeaderOffset <= 0 || m_pHeader->varHeaderOffset > 1024*1024) {
+        std::cerr << "[IRSDK] WARNING: varHeaderOffset=" << m_pHeader->varHeaderOffset << " looks wrong\n";
+    }
+
     // Try to open the event (optional – we have polling fallback)
     m_hDataValidEvent = OpenEvent(SYNCHRONIZE, FALSE, IRSDK_DATAVALIDEVENTNAME);
-    // ↑ Failure is OK, we don't return false here anymore
 
     // Important: read initial buffer so we have data immediately on connect
     updateLatestBufferIndex();
@@ -88,8 +128,41 @@ bool IRSDKManager::openSharedMemory() {
     }
     m_sessionInfoUpdate = m_pHeader->sessionInfoUpdate;
 
-    std::cout << "iRacing memory map opened (event " 
-              << (m_hDataValidEvent ? "OK" : "not available – using polling") << ")\n";
+    std::cout << "[IRSDK] Memory map opened (event " 
+              << (m_hDataValidEvent ? "OK" : "not available - using polling") 
+              << "), latestBuf=" << m_latestBufIndex 
+              << ", lastTick=" << m_lastTickCount << "\n";
+
+    // ── Print first few variable headers for sanity check ────
+    if (m_pHeader->numVars > 0 && m_pHeader->varHeaderOffset > 0) {
+        const auto* headers = reinterpret_cast<const irsdk_varHeader*>(
+            m_pSharedMem + m_pHeader->varHeaderOffset);
+        int printCount = std::min(m_pHeader->numVars, 10);
+        std::cout << "[IRSDK] First " << printCount << " variable headers:\n";
+        for (int i = 0; i < printCount; ++i) {
+            std::cout << "[IRSDK]   [" << i << "] name=\"" << headers[i].name 
+                      << "\" type=" << headers[i].type
+                      << " offset=" << headers[i].offset
+                      << " count=" << headers[i].count << "\n";
+        }
+    }
+
+    // ── Spot-check critical variables ────────────────────────
+    {
+        const char* checkVars[] = {"Throttle", "Brake", "Clutch", "PlayerCarIdx",
+                                    "CarIdxLapDistPct", "CarIdxPosition", "SessionTime"};
+        for (const char* vname : checkVars) {
+            const auto* vh = getVarHeader(vname);
+            if (vh) {
+                std::cout << "[IRSDK]   FOUND \"" << vname << "\" type=" << vh->type
+                          << " offset=" << vh->offset << " count=" << vh->count << "\n";
+            } else {
+                std::cerr << "[IRSDK]   MISSING \"" << vname << "\" - NOT FOUND in var headers!\n";
+            }
+        }
+    }
+
+    std::cout << "[IRSDK] ====================================\n";
 
     return true;
 }
@@ -111,12 +184,14 @@ bool IRSDKManager::waitForData(int timeoutMS) {
     }
 
     bool newData = false;
+    bool usedEvent = false;
 
     // Prefer event when available (low CPU usage)
     if (m_hDataValidEvent) {
         DWORD result = WaitForSingleObject(m_hDataValidEvent, timeoutMS);
         if (result == WAIT_OBJECT_0) {
             newData = true;
+            usedEvent = true;
         }
     }
 
@@ -128,9 +203,59 @@ bool IRSDKManager::waitForData(int timeoutMS) {
 
     if (newData) {
         updateLatestBufferIndex();
+        int prevTick = m_lastTickCount;
         m_lastTickCount = m_pHeader->varBuf[m_latestBufIndex].tickCount;
-        // Optional: update session info version if changed
+
+        // Log periodically (every ~120 frames ≈ 2 sec at 60Hz)
+        static int logCounter = 0;
+        if (++logCounter >= 120) {
+            logCounter = 0;
+            std::cout << "[IRSDK] waitForData: path=" << (usedEvent ? "EVENT" : "POLL")
+                      << " buf=" << m_latestBufIndex
+                      << " tick=" << m_lastTickCount
+                      << " (prev=" << prevTick << ")"
+                      << " delta=" << (m_lastTickCount - prevTick) << "\n";
+
+            // Spot-check a few values
+            const char* dataPtr = getDataPtr();
+            if (dataPtr) {
+                const auto* thrH = getVarHeader("Throttle");
+                const auto* brkH = getVarHeader("Brake");
+                const auto* cltH = getVarHeader("Clutch");
+                
+                std::cout << "[IRSDK]   dataPtr valid, bufOffset=" 
+                          << m_pHeader->varBuf[m_latestBufIndex].bufOffset << "\n";
+                
+                if (thrH) {
+                    float val = *(const float*)(dataPtr + thrH->offset);
+                    std::cout << "[IRSDK]   Throttle=" << val 
+                              << " (ptr=" << (thrH ? "OK" : "NULL") << ")\n";
+                } else {
+                    std::cout << "[IRSDK]   Throttle header=nullptr!\n";
+                }
+                if (brkH) {
+                    float val = *(const float*)(dataPtr + brkH->offset);
+                    std::cout << "[IRSDK]   Brake=" << val
+                              << " (ptr=" << (brkH ? "OK" : "NULL") << ")\n";
+                } else {
+                    std::cout << "[IRSDK]   Brake header=nullptr!\n";
+                }
+                if (cltH) {
+                    float val = *(const float*)(dataPtr + cltH->offset);
+                    std::cout << "[IRSDK]   Clutch=" << val
+                              << " (ptr=" << (cltH ? "OK" : "NULL") << ")\n";
+                } else {
+                    std::cout << "[IRSDK]   Clutch header=nullptr!\n";
+                }
+            } else {
+                std::cout << "[IRSDK]   dataPtr=nullptr!\n";
+            }
+        }
+
+        // Update session info version if changed
         if (m_pHeader->sessionInfoUpdate != m_sessionInfoUpdate) {
+            std::cout << "[IRSDK] Session info updated: " << m_sessionInfoUpdate 
+                      << " -> " << m_pHeader->sessionInfoUpdate << "\n";
             m_sessionInfoUpdate = m_pHeader->sessionInfoUpdate;
         }
         return true;
@@ -140,10 +265,11 @@ bool IRSDKManager::waitForData(int timeoutMS) {
 }
 
 void IRSDKManager::updateLatestBufferIndex() {
+    int numBuf = std::min(m_pHeader->numBuf, (int)IRSDK_MAX_BUFS);
     m_latestBufIndex = 0;
     int maxTick = m_pHeader->varBuf[0].tickCount;
 
-    for (int i = 1; i < m_pHeader->numBuf; ++i) {
+    for (int i = 1; i < numBuf; ++i) {
         if (m_pHeader->varBuf[i].tickCount > maxTick) {
             maxTick = m_pHeader->varBuf[i].tickCount;
             m_latestBufIndex = i;
@@ -153,8 +279,9 @@ void IRSDKManager::updateLatestBufferIndex() {
 
 int IRSDKManager::getLatestTickCount() const {
     if (!m_pHeader) return -1;
+    int numBuf = std::min(m_pHeader->numBuf, (int)IRSDK_MAX_BUFS);
     int maxTick = -1;
-    for (int i = 0; i < m_pHeader->numBuf; ++i) {
+    for (int i = 0; i < numBuf; ++i) {
         maxTick = std::max(maxTick, m_pHeader->varBuf[i].tickCount);
     }
     return maxTick;
@@ -176,8 +303,6 @@ const irsdk_varHeader* IRSDKManager::getVarHeader(const char* name) const {
             return &headers[i];
         }
     }
-    // Opcional: descomentar para debug
-    // std::cerr << "Variable no encontrada: " << name << "\n";
     return nullptr;
 }
 
@@ -190,7 +315,7 @@ float IRSDKManager::getFloat(const char* name, float defaultValue) const {
     const char* data = getDataPtr();
     if (!data) return defaultValue;
 
-    // Double-check: tick no cambió durante lectura (muy raro pero posible)
+    // Torn-read check: verify tick hasn't changed during read
     int tickBefore = m_pHeader->varBuf[m_latestBufIndex].tickCount;
     float value = (header->type == irsdk_double)
         ? static_cast<float>(*(const double*)(data + header->offset))
