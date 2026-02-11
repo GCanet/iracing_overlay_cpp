@@ -2,6 +2,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 
 namespace utils {
 
@@ -20,7 +21,7 @@ std::string YAMLParser::extractValue(const std::string& line) {
     value = trim(value);
     
     // Remove quotes if present
-    if (!value.empty() && value.front() == '"' && value.back() == '"') {
+    if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
         value = value.substr(1, value.length() - 2);
     }
     
@@ -49,7 +50,7 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
     SessionInfo info;
     info.sessionLaps = 0;
     info.sessionTime = 0.0f;
-    info.seriesName = "Unknown Series";
+    info.seriesName = "";
     info.trackName = "Unknown Track";
     
     if (!yaml) return info;
@@ -57,89 +58,80 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
     std::istringstream stream(yaml);
     std::string line;
     
-    bool inWeekendInfo = false;
-    bool inDriverInfo = false;
-    bool inDrivers = false;
-    bool inSessionInfo = false;
+    // Section tracking — only ONE can be active at a time
+    enum Section { NONE, WEEKEND_INFO, DRIVER_INFO, SESSION_INFO };
+    Section section = NONE;
+    bool inDriversList = false;  // inside the "Drivers:" sub-list
     
     DriverInfo currentDriver;
     bool buildingDriver = false;
     
     while (std::getline(stream, line)) {
-        std::string trimmed = trim(line);
-        if (trimmed.empty()) continue;
-        
-        // Count indentation
+        // Count indentation (raw line, before trim)
         int indent = 0;
         for (char c : line) {
             if (c == ' ') indent++;
+            else if (c == '\t') indent += 2;
             else break;
         }
         
-        // Top level sections
-        if (trimmed.find("WeekendInfo:") == 0) {
-            inWeekendInfo = true;
-            inDriverInfo = false;
-            inSessionInfo = false;
-            continue;
-        }
-        else if (trimmed.find("DriverInfo:") == 0) {
-            inWeekendInfo = false;
-            inDriverInfo = true;
-            inSessionInfo = false;
-            continue;
-        }
-        else if (trimmed.find("SessionInfo:") == 0) {
-            inWeekendInfo = false;
-            inDriverInfo = false;
-            inSessionInfo = true;
-            continue;
+        std::string trimmed = trim(line);
+        if (trimmed.empty()) continue;
+        
+        // ── Top-level section detection (indent == 0, ends with ':') ──
+        // Any line at indent 0 that ends with ':' and has no value → new section
+        if (indent == 0 && !trimmed.empty()) {
+            // Check if this is a top-level section header
+            size_t colonPos = trimmed.find(':');
+            if (colonPos != std::string::npos) {
+                std::string afterColon = trim(trimmed.substr(colonPos + 1));
+                // Section header if nothing after colon (or only whitespace)
+                if (afterColon.empty()) {
+                    // Save any pending driver before switching sections
+                    if (buildingDriver && section == DRIVER_INFO) {
+                        info.drivers.push_back(currentDriver);
+                        buildingDriver = false;
+                    }
+                    inDriversList = false;
+                    
+                    std::string sectionName = trim(trimmed.substr(0, colonPos));
+                    if (sectionName == "WeekendInfo") {
+                        section = WEEKEND_INFO;
+                    } else if (sectionName == "DriverInfo") {
+                        section = DRIVER_INFO;
+                    } else if (sectionName == "SessionInfo") {
+                        section = SESSION_INFO;
+                    } else {
+                        // Any other top-level section → stop parsing driver data
+                        section = NONE;
+                    }
+                    continue;
+                }
+            }
         }
         
-        // WeekendInfo parsing
-        if (inWeekendInfo) {
-            if (trimmed.find("TrackName:") != std::string::npos) {
+        // ── WeekendInfo parsing ──────────────────────────────
+        if (section == WEEKEND_INFO && indent > 0) {
+            if (trimmed.find("TrackName:") == 0) {
                 info.trackName = extractValue(trimmed);
             }
-            else if (trimmed.find("SeriesName:") != std::string::npos) {
-                // Only match "SeriesName:" not "SeriesNameShort:" etc.
-                std::string key = trimmed.substr(0, trimmed.find(':'));
-                key = trim(key);
-                if (key == "SeriesName") {
-                    info.seriesName = extractValue(trimmed);
-                }
+            // Match exact "SeriesName:" not "SeriesNameShort:" etc.
+            else if (trimmed.find("SeriesName:") == 0 && trimmed[10] == ':') {
+                info.seriesName = extractValue(trimmed);
             }
         }
         
-        // SessionInfo parsing
-        if (inSessionInfo) {
-            if (trimmed.find("SessionLaps:") != std::string::npos) {
-                std::string value = extractValue(trimmed);
-                if (value == "unlimited") {
-                    info.sessionLaps = 999999;
-                } else {
-                    info.sessionLaps = extractInt(trimmed);
-                }
-            }
-            else if (trimmed.find("SessionTime:") != std::string::npos) {
-                std::string value = extractValue(trimmed);
-                if (value == "unlimited") {
-                    info.sessionTime = 999999.0f;
-                } else {
-                    info.sessionTime = extractFloat(trimmed);
-                }
-            }
-        }
-        
-        // DriverInfo parsing
-        if (inDriverInfo) {
-            if (trimmed.find("Drivers:") == 0) {
-                inDrivers = true;
+        // ── DriverInfo parsing ───────────────────────────────
+        if (section == DRIVER_INFO) {
+            // Detect "Drivers:" sub-section
+            if (trimmed == "Drivers:") {
+                inDriversList = true;
                 continue;
             }
             
-            if (inDrivers) {
-                // New driver entry (starts with -)
+            if (inDriversList) {
+                // New driver entry: line starts with '-'
+                // iRacing format: " - CarIdx: 0"
                 if (trimmed[0] == '-') {
                     // Save previous driver
                     if (buildingDriver) {
@@ -151,63 +143,96 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
                     currentDriver.carIdx = -1;
                     currentDriver.iRating = 0;
                     currentDriver.licenseLevel = 0;
-                    currentDriver.licSubLevel = 0;   // FIX: init new field
+                    currentDriver.licSubLevel = 0;
                     buildingDriver = true;
                     
-                    // Parse first field on same line
-                    size_t colon = trimmed.find(':');
-                    if (colon != std::string::npos) {
-                        std::string key = trimmed.substr(2, colon - 2); // Skip "- "
-                        key = trim(key);
-                        
-                        if (key == "CarIdx") {
-                            currentDriver.carIdx = extractInt(trimmed);
+                    // Parse the field on the same line as '-'
+                    // e.g. "- CarIdx: 0" → strip "- " then treat as normal field
+                    std::string afterDash = trim(trimmed.substr(1));
+                    if (!afterDash.empty() && afterDash.find(':') != std::string::npos) {
+                        // Process this field
+                        if (afterDash.find("CarIdx:") == 0) {
+                            currentDriver.carIdx = extractInt(afterDash);
                         }
                     }
                 }
-                // Driver properties
-                else if (buildingDriver && indent >= 4) {
-                    if (trimmed.find("UserName:") != std::string::npos) {
+                // Continuation properties of current driver
+                else if (buildingDriver && indent >= 2) {
+                    // Use starts-with matching to avoid substring false matches
+                    if (trimmed.find("UserName:") == 0) {
                         currentDriver.userName = extractValue(trimmed);
                     }
-                    else if (trimmed.find("CarNumber:") != std::string::npos) {
-                        currentDriver.carNumber = extractValue(trimmed);
+                    else if (trimmed.find("CarNumber:") == 0) {
+                        std::string val = extractValue(trimmed);
+                        // CarNumber can be quoted: "13" or unquoted: 13
+                        currentDriver.carNumber = val;
                     }
-                    else if (trimmed.find("IRating:") != std::string::npos) {
+                    else if (trimmed.find("IRating:") == 0) {
                         currentDriver.iRating = extractInt(trimmed);
                     }
-                    else if (trimmed.find("LicLevel:") != std::string::npos) {
+                    else if (trimmed.find("LicLevel:") == 0) {
                         currentDriver.licenseLevel = extractInt(trimmed);
                     }
-                    // FIX: Parse LicSubLevel (safety rating * 100, e.g. 349 = SR 3.49)
-                    else if (trimmed.find("LicSubLevel:") != std::string::npos) {
+                    else if (trimmed.find("LicSubLevel:") == 0) {
                         currentDriver.licSubLevel = extractInt(trimmed);
                     }
-                    // FIX: Parse LicString as fallback (e.g. "A 4.99")
-                    else if (trimmed.find("LicString:") != std::string::npos) {
+                    else if (trimmed.find("LicString:") == 0) {
                         currentDriver.licString = extractValue(trimmed);
                     }
-                    else if (trimmed.find("CarPath:") != std::string::npos) {
+                    else if (trimmed.find("CarPath:") == 0) {
                         currentDriver.carPath = extractValue(trimmed);
                     }
-                    // Car class checks
-                    else if (trimmed.find("CarClassShortName:") != std::string::npos) {
+                    else if (trimmed.find("CarClassShortName:") == 0) {
                         currentDriver.carClassShortName = extractValue(trimmed);
                     }
-                    else if (trimmed.find("CarClass:") != std::string::npos) {
-                        // fallback only if ShortName wasn't found earlier
-                        if (currentDriver.carClassShortName.empty()) {
-                            currentDriver.carClassShortName = extractValue(trimmed);
-                        }
+                    else if (trimmed.find("CarScreenName:") == 0) {
+                        // Additional fallback for class
                     }
+                }
+            }
+        }
+        
+        // ── SessionInfo parsing ──────────────────────────────
+        if (section == SESSION_INFO && indent > 0) {
+            if (trimmed.find("SessionLaps:") == 0) {
+                std::string value = extractValue(trimmed);
+                if (value == "unlimited") {
+                    info.sessionLaps = 999999;
+                } else {
+                    info.sessionLaps = extractInt(trimmed);
+                }
+            }
+            else if (trimmed.find("SessionTime:") == 0) {
+                std::string value = extractValue(trimmed);
+                if (value == "unlimited") {
+                    info.sessionTime = 999999.0f;
+                } else {
+                    info.sessionTime = extractFloat(trimmed);
                 }
             }
         }
     }
     
-    // Don't forget last driver
-    if (buildingDriver) {
+    // Don't forget last driver being built
+    if (buildingDriver && section == DRIVER_INFO) {
         info.drivers.push_back(currentDriver);
+    }
+
+    // ── Debug summary ────────────────────────────────────────
+    std::cout << "[YAML] Parsed: series=\"" << info.seriesName 
+              << "\" track=\"" << info.trackName
+              << "\" drivers=" << info.drivers.size()
+              << " laps=" << info.sessionLaps << "\n";
+    for (size_t i = 0; i < std::min(info.drivers.size(), (size_t)3); ++i) {
+        const auto& d = info.drivers[i];
+        std::cout << "[YAML]   [" << d.carIdx << "] \"" << d.userName 
+                  << "\" #" << d.carNumber
+                  << " iR=" << d.iRating
+                  << " licSub=" << d.licSubLevel
+                  << " licStr=\"" << d.licString << "\"\n";
+    }
+    if (info.drivers.size() > 3) {
+        std::cout << "[YAML]   ... and " << (info.drivers.size() - 3) << " more\n";
     }
     
     return info;
