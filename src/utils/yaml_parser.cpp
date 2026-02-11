@@ -102,7 +102,12 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
                 info.trackName = extractValue(trimmed);
             }
             else if (trimmed.find("SeriesName:") != std::string::npos) {
-                info.seriesName = extractValue(trimmed);
+                // Only match "SeriesName:" not "SeriesNameShort:" etc.
+                std::string key = trimmed.substr(0, trimmed.find(':'));
+                key = trim(key);
+                if (key == "SeriesName") {
+                    info.seriesName = extractValue(trimmed);
+                }
             }
         }
         
@@ -146,6 +151,7 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
                     currentDriver.carIdx = -1;
                     currentDriver.iRating = 0;
                     currentDriver.licenseLevel = 0;
+                    currentDriver.licSubLevel = 0;   // FIX: init new field
                     buildingDriver = true;
                     
                     // Parse first field on same line
@@ -173,10 +179,18 @@ YAMLParser::SessionInfo YAMLParser::parse(const char* yaml) {
                     else if (trimmed.find("LicLevel:") != std::string::npos) {
                         currentDriver.licenseLevel = extractInt(trimmed);
                     }
+                    // FIX: Parse LicSubLevel (safety rating * 100, e.g. 349 = SR 3.49)
+                    else if (trimmed.find("LicSubLevel:") != std::string::npos) {
+                        currentDriver.licSubLevel = extractInt(trimmed);
+                    }
+                    // FIX: Parse LicString as fallback (e.g. "A 4.99")
+                    else if (trimmed.find("LicString:") != std::string::npos) {
+                        currentDriver.licString = extractValue(trimmed);
+                    }
                     else if (trimmed.find("CarPath:") != std::string::npos) {
                         currentDriver.carPath = extractValue(trimmed);
                     }
-                    // ── Add the car class checks here, at the same level ──
+                    // Car class checks
                     else if (trimmed.find("CarClassShortName:") != std::string::npos) {
                         currentDriver.carClassShortName = extractValue(trimmed);
                     }

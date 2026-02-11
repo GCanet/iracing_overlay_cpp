@@ -16,7 +16,9 @@ public:
         std::string userName;
         std::string carNumber;
         int iRating;
-        int licenseLevel;
+        int licenseLevel;      // LicLevel (1=R, 4-7=D, 8-11=C, etc.)
+        int licSubLevel;       // FIX: LicSubLevel = safety rating * 100 (e.g. 349 = 3.49)
+        std::string licString; // FIX: LicString like "A 4.99" (fallback)
         std::string carPath;
         std::string carClassShortName;
     };
