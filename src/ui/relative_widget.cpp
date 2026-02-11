@@ -26,10 +26,10 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
 
     // ── Calculate tight window size based on actual content ──
     float rowH    = ImGui::GetTextLineHeightWithSpacing();
-    float headerH = rowH + 4.0f;  // header text + separator
-    float tableH  = rowH * std::max(numDrivers, 1) + 4.0f;
-    float padY    = 6.0f;  // top + bottom padding
-    float totalH  = headerH + tableH + padY * 2.0f;
+    float headerH = rowH + 2.0f;  // header text + separator
+    float tableH  = rowH * std::max(numDrivers, 1);
+    float padY    = 4.0f;  // top + bottom padding
+    float totalH  = headerH + tableH + padY * 2.0f - 1.0f;  // -1 to kill bottom slack
     float totalW  = 380.0f * m_scale;
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
@@ -102,11 +102,14 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
 
 void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
     // Compact single-line header
-    const char* series = relative->getSeriesName().c_str();
+    std::string series = relative->getSeriesName();
+    if (series.empty() || series == "Unknown Series") {
+        series = "Practice Session";
+    }
     std::string lapInfo = relative->getLapInfo();
     int sof = relative->getSOF();
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.9f, 1.0f), "%s", series);
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.9f, 1.0f), "%s", series.c_str());
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "|");
     ImGui::SameLine();

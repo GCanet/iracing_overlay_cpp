@@ -43,12 +43,13 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
     // ── Compact layout: match iRacing game widget height ──
     // Row 1: RPM shift lights (thin strip)
     // Row 2: ABS | Trace | Bars | Gear+Speed | Steering (single row)
-    float rowH   = 42.0f * m_scale;       // main content row height (+10px)
-    float rpmH   = 10.0f * m_scale;       // thin RPM strip
+    float rowH   = 42.0f * m_scale;       // main content row height
+    float rpmH   = 5.0f * m_scale;        // RPM strip halved vertically
     float padY   = 3.0f * m_scale;
-    float gapRpm = 1.0f * m_scale;        // halved gap between RPM and content
-    float totalH = rpmH + gapRpm + rowH + padY * 2.0f;
-    float totalW = 480.0f * m_scale;
+    float padBot = 2.0f * m_scale;         // extra bottom padding
+    float gapRpm = 1.0f * m_scale;         // gap between RPM and content
+    float totalH = rpmH + gapRpm + rowH + padY + padBot;
+    float totalW = 380.0f * m_scale;       // narrower: trace halved
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
 
@@ -61,9 +62,9 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
     ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
-    ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.0f, 0.0f, 0.0f, 0.0f));  // invisible border
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, padY));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);  // no border
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
                              ImGuiWindowFlags_NoResize   | ImGuiWindowFlags_NoScrollbar |
@@ -92,10 +93,11 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
     float barsW   = 30.0f * m_scale;   // 3 thin bars
     float gearW   = 44.0f * m_scale;   // gear + speed stacked
     float steerW  = rowH;              // square
-    float gap     = 4.0f * m_scale;    // spacing between elements
+    float gap     = 4.0f * m_scale;    // normal spacing
+    float gapTight= 1.0f * m_scale;    // tight spacing around gear
 
     // Trace gets all remaining width (no dead space on the right)
-    float traceW  = contentW - absW - barsW - gearW - steerW - gap * 4.0f;
+    float traceW  = contentW - absW - barsW - gearW - steerW - gap * 2.0f - gapTight * 2.0f;
 
     // ABS
     renderABSIndicator(absW, rowH);
@@ -107,11 +109,11 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, bool editMode) {
 
     // Input bars
     renderInputBarsCompact(barsW, rowH);
-    ImGui::SameLine(0, gap);
+    ImGui::SameLine(0, gapTight);
 
     // Gear + Speed (stacked vertically, centred)
     renderGearDisplay(gearW, rowH);
-    ImGui::SameLine(0, gap);
+    ImGui::SameLine(0, gapTight);
 
     // Steering wheel
     renderSteeringWheelCompact(steerW, rowH);
@@ -210,10 +212,9 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
     float rpmPct = (m_maxRPM > 0) ? std::min(m_currentRPM / m_maxRPM, 1.0f) : 0.0f;
-    int numLights = 10;
+    int numLights = 8;
     float gap = 2.0f * m_scale;
     float lightW = (width - (numLights - 1) * gap) / numLights;
-    // +1 so that rpmPct==1.0 lights ALL squares (ceil behavior)
     int activeLights = (int)(rpmPct * numLights + 0.5f);
 
     for (int i = 0; i < numLights; i++) {
@@ -223,15 +224,20 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
 
         ImU32 col = IM_COL32(30, 30, 30, 200);
         if (i < activeLights) {
-            float pct = (float)i / numLights;
             if (m_blinkRPM > 0 && m_currentRPM >= m_blinkRPM) {
                 int blink = (int)(ImGui::GetTime() * 10) % 2;
                 col = blink ? IM_COL32(255, 0, 0, 255) : IM_COL32(80, 0, 0, 255);
-            } else if (pct > 0.8f) col = IM_COL32(0, 200, 0, 255);
-            else if (pct > 0.55f) col = IM_COL32(255, 255, 0, 255);
-            else col = IM_COL32(0, 200, 0, 255);
+            } else if (i == numLights - 1) {
+                // Last square is always red when lit
+                col = IM_COL32(255, 0, 0, 255);
+            } else {
+                float pct = (float)i / numLights;
+                if (pct > 0.7f) col = IM_COL32(255, 255, 0, 255);
+                else col = IM_COL32(0, 200, 0, 255);
+            }
         }
-        dl->AddRectFilled(tl, br, col, 2.0f);
+        dl->AddRectFilled(tl, br, col, 1.0f);
+    }
     }
     ImGui::Dummy(ImVec2(width, height));
 }
@@ -265,7 +271,7 @@ void TelemetryWidget::renderInputTrace(float width, float height) {
     if (m_showThrottle) trace(m_throttleHistory, IM_COL32(0, 220, 0, 220), 2.0f * m_scale);
     if (m_showBrake)    trace(m_brakeHistory,    IM_COL32(255, 0, 0, 220), 2.0f * m_scale);
     if (m_showClutch)   trace(m_clutchHistory,   IM_COL32(60, 120, 255, 160), 1.5f * m_scale);
-    if (m_showSteering) trace(m_steerHistory,    IM_COL32(255, 255, 255, 90), 1.0f * m_scale);
+    // Steering trace removed — it draws a flat line at ~50% that looks like a purple bar
 
     if (m_showABS) {
         for (int i = 0; i < n; i++) {
