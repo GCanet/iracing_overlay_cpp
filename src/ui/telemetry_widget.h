@@ -17,7 +17,7 @@ namespace ui {
         void render(iracing::IRSDKManager* sdk, bool editMode = false);
 
     private:
-        // Rendering components (compact layout)
+        // Rendering components (compact single-row layout)
         void renderABSIndicator(float width, float height);
         void renderShiftLights(float width, float height);
         void renderInputTrace(float width, float height);
@@ -61,19 +61,11 @@ namespace ui {
         bool m_showABS = true;
         bool m_showSteering = true;
         
-        float m_strokeWidth = 3.0f;
+        float m_strokeWidth = 2.0f;
         int   m_maxSamples = 180;
         
         float m_scale = 1.0f;
         OverlayWindow* m_overlay;
-
-        static constexpr float WIDGET_WIDTH = 400.0f;
-        static constexpr float WIDGET_HEIGHT = 300.0f;
-        static constexpr float TRACE_HEIGHT = 100.0f;
-        static constexpr float BAR_HEIGHT = 80.0f;
-        static constexpr float GEAR_HEIGHT = 40.0f;
-        static constexpr float STEERING_SIZE = 60.0f;
-        static constexpr float TACHO_HEIGHT = 30.0f;
     };
 
 } // namespace ui
