@@ -6,6 +6,7 @@
 #include "ui/overlay_window.h"
 #include <cstdio>
 #include <algorithm>
+#include <cmath>
 
 namespace ui {
 
@@ -19,9 +20,11 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
 
     auto& config = utils::Config::getRelativeConfig();
 
-    ImGui::SetWindowFontScale(m_scale);
+    // FIX: Do NOT call SetWindowFontScale before Begin().
+    // Calling it before Begin() touches ImGui's default "Debug" window,
+    // making it visible as a ghost widget.
 
-    // Tamaño mínimo razonable
+    // Reasonable minimum size
     float minWidth = 400.0f * m_scale;
     float minHeight = 300.0f * m_scale;
 
@@ -34,11 +37,13 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, config.alpha));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);  // FIX: ImGui:: en lugar de ImGui:
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse |
                              ImGuiWindowFlags_NoTitleBar |
-                             ImGuiWindowFlags_NoResize;
+                             ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoFocusOnAppearing |
+                             ImGuiWindowFlags_NoNav;
 
     if (!editMode) {
         flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
@@ -46,7 +51,10 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
 
     ImGui::Begin("##RELATIVE", nullptr, flags);
 
-    // Guardar posición actualizada
+    // FIX: SetWindowFontScale AFTER Begin() so it targets our window, not Debug
+    ImGui::SetWindowFontScale(m_scale);
+
+    // Save updated position
     ImVec2 pos = ImGui::GetWindowPos();
     config.posX = pos.x;
     config.posY = pos.y;
@@ -57,13 +65,13 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
     renderHeader(relative);
     ImGui::Separator();
 
-    // Buffer para formateo
+    // Format buffer
     char buffer[128];
 
-    // Obtener drivers relativos (4 adelante, 4 atrás)
+    // Get relative drivers (4 ahead, 4 behind)
     auto drivers = relative->getRelative(4, 4);
 
-    // Tabla de drivers
+    // Driver table
     if (ImGui::BeginTable("RelativeTable", 7, 
                          ImGuiTableFlags_RowBg | 
                          ImGuiTableFlags_BordersInnerV)) {
@@ -77,7 +85,7 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
         ImGui::TableSetupColumn("Last", ImGuiTableColumnFlags_WidthFixed, 70);
         ImGui::TableSetupColumn("Gap", ImGuiTableColumnFlags_WidthFixed, 70);
         
-        // Renderizar cada driver
+        // Render each driver
         for (const auto& driver : drivers) {
             renderDriverRow(driver, driver.isPlayer, buffer);
         }
@@ -103,12 +111,12 @@ void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
 void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlayer, char* buffer) {
     ImGui::TableNextRow();
 
-    // Colorear la fila del jugador
+    // Highlight player row
     if (isPlayer) {
         ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(255, 215, 0, 40));
     }
 
-    // Columna: Posición
+    // Column: Position
     ImGui::TableNextColumn();
     if (driver.isOnPit) {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "PIT");
@@ -116,11 +124,11 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         ImGui::Text("P%d", driver.relativePosition);
     }
 
-    // Columna: Número de coche
+    // Column: Car Number
     ImGui::TableNextColumn();
     ImGui::Text("#%s", driver.carNumber.c_str());
 
-    // Columna: Nombre del piloto
+    // Column: Driver Name
     ImGui::TableNextColumn();
     if (isPlayer) {
         ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", driver.driverName.c_str());
@@ -128,17 +136,17 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         ImGui::Text("%s", driver.driverName.c_str());
     }
 
-    // Columna: Safety Rating
+    // Column: Safety Rating
     ImGui::TableNextColumn();
     float r, g, b;
     getSafetyRatingColor(driver.safetyRating, r, g, b);
-    ImGui::TextColored(ImVec4(r, g, b, 1.0f), "%s%.1f", 
+    float srDecimal = driver.safetyRating - static_cast<float>(static_cast<int>(driver.safetyRating));
+    if (srDecimal < 0.0f) srDecimal += 1.0f;
+    ImGui::TextColored(ImVec4(r, g, b, 1.0f), "%s%.2f", 
                       getSafetyRatingLetter(driver.safetyRating),
-                      driver.safetyRating - (int)driver.safetyRating >= 0 ? 
-                          driver.safetyRating - (int)driver.safetyRating : 
-                          1.0f + (driver.safetyRating - (int)driver.safetyRating));
+                      srDecimal);
 
-    // Columna: iRating
+    // Column: iRating
     ImGui::TableNextColumn();
     snprintf(buffer, 128, "%dk", driver.iRating / 1000);
     if (driver.iRatingProjection != 0) {
@@ -152,12 +160,12 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         ImGui::Text("%s", buffer);
     }
 
-    // Columna: Last Lap Time
+    // Column: Last Lap Time
     ImGui::TableNextColumn();
     formatTime(driver.lastLapTime, buffer);
     ImGui::Text("%s", buffer);
 
-    // Columna: Gap
+    // Column: Gap
     ImGui::TableNextColumn();
     formatGap(driver.gapToPlayer, buffer);
     if (driver.gapToPlayer > 0) {
@@ -173,14 +181,14 @@ void RelativeWidget::formatGap(float gap, char* buffer) {
     if (std::abs(gap) < 0.01f) {
         snprintf(buffer, 128, "---");
     } else if (gap > 0) {
-        // Piloto detrás del jugador
+        // Driver behind the player
         if (gap >= 1.0f) {
             snprintf(buffer, 128, "+%.0f L", gap);
         } else {
             snprintf(buffer, 128, "+%.1fs", gap);
         }
     } else {
-        // Piloto delante del jugador
+        // Driver ahead of the player
         float absGap = std::abs(gap);
         if (absGap >= 1.0f) {
             snprintf(buffer, 128, "-%.0f L", absGap);

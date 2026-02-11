@@ -112,7 +112,7 @@ void OverlayWindow::setupImGui() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavNoCaptureKeyboard;
-    io.IniFilename = nullptr; // No guardar imgui.ini
+    io.IniFilename = nullptr; // Don't save imgui.ini
 
     ImGui_ImplGlfw_InitForOpenGL(m_window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -194,18 +194,32 @@ void OverlayWindow::renderFrame() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    // ──────────────────────────────────────────────────
     // ONLY render these two widgets - NO debug windows
+    // ──────────────────────────────────────────────────
     m_relativeWidget->render(m_relative.get(), m_editMode);
     m_telemetryWidget->render(m_sdk.get(), m_editMode);
 
+    // ──────────────────────────────────────────────────
     // Status indicator in top-right corner
+    // FIX: Declare 'io' before using it (was missing → C2065 + C2440)
+    // ──────────────────────────────────────────────────
     {
-        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 10.0f, 10.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+        ImGuiIO& io = ImGui::GetIO();   // ← THIS WAS MISSING
+
+        ImGui::SetNextWindowPos(
+            ImVec2(io.DisplaySize.x - 10.0f, 10.0f),
+            ImGuiCond_Always,
+            ImVec2(1.0f, 0.0f)
+        );
         ImGui::SetNextWindowBgAlpha(0.5f);
+
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
                                 ImGuiWindowFlags_NoMove |
                                 ImGuiWindowFlags_NoSavedSettings |
-                                ImGuiWindowFlags_AlwaysAutoResize;
+                                ImGuiWindowFlags_AlwaysAutoResize |
+                                ImGuiWindowFlags_NoFocusOnAppearing |
+                                ImGuiWindowFlags_NoNav;
         if (!m_editMode) {
             flags |= ImGuiWindowFlags_NoInputs;
         }
