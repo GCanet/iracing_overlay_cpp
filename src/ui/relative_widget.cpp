@@ -1,5 +1,6 @@
 #include "ui/relative_widget.h"
 #include "data/relative_calc.h"
+#include "data/irsdk_manager.h"
 #include "utils/config.h"
 #include "imgui.h"
 #include "ui/overlay_window.h"
