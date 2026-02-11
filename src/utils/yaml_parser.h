@@ -7,32 +7,31 @@
 
 namespace utils {
 
-// Simple YAML parser for iRacing SessionInfo
-// Doesn't handle all YAML features, just what iRacing uses
 class YAMLParser {
 public:
     struct DriverInfo {
-        int carIdx;
+        int carIdx = -1;
         std::string userName;
         std::string carNumber;
-        int iRating;
-        int licenseLevel;      // LicLevel (1=R, 4-7=D, 8-11=C, etc.)
-        int licSubLevel;       // FIX: LicSubLevel = safety rating * 100 (e.g. 349 = 3.49)
-        std::string licString; // FIX: LicString like "A 4.99" (fallback)
+        int iRating = 0;
+        int licenseLevel = 0;
+        int licSubLevel = 0;
+        std::string licString;
         std::string carPath;
         std::string carClassShortName;
+        std::string countryCode;   // e.g. "ES", "NL", "US"
     };
-    
+
     struct SessionInfo {
         std::string seriesName;
         std::string trackName;
-        int sessionLaps;
-        float sessionTime;
+        int sessionLaps = 0;
+        float sessionTime = 0.0f;
         std::vector<DriverInfo> drivers;
     };
-    
+
     static SessionInfo parse(const char* yaml);
-    
+
 private:
     static std::string trim(const std::string& str);
     static std::string extractValue(const std::string& line);
@@ -42,4 +41,4 @@ private:
 
 } // namespace utils
 
-#endif // YAML_PARSER_H
+#endif // UTILS_YAML_PARSER_H
