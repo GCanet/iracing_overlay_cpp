@@ -1,9 +1,6 @@
 #ifndef IRSDK_DEFINES_H
 #define IRSDK_DEFINES_H
 
-#include <Windows.h>
-#include <cstdint>
-
 // iRacing SDK Constants
 #define IRSDK_MAX_BUFS 4
 #define IRSDK_MAX_STRING 32
