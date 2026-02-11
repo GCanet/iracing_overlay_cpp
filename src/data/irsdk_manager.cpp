@@ -77,13 +77,19 @@ bool IRSDKManager::openSharedMemory() {
         return false;
     }
 
+    // Try to open the event (optional – we have polling fallback)
     m_hDataValidEvent = OpenEvent(SYNCHRONIZE, FALSE, IRSDK_DATAVALIDEVENTNAME);
-    // Si falla el event → se usa polling (no fatal)
+    // ↑ Failure is OK, we don't return false here anymore
 
-    std::cout << "iRacing SDK opened (ver " << m_pHeader->ver
-              << ", tickRate " << m_pHeader->tickRate
-              << ", vars " << m_pHeader->numVars
-              << ", bufs " << m_pHeader->numBuf << ")\n";
+    // Important: read initial buffer so we have data immediately on connect
+    updateLatestBufferIndex();
+    if (m_latestBufIndex >= 0) {
+        m_lastTickCount = m_pHeader->varBuf[m_latestBufIndex].tickCount;
+    }
+    m_sessionInfoUpdate = m_pHeader->sessionInfoUpdate;
+
+    std::cout << "iRacing memory map opened (event " 
+              << (m_hDataValidEvent ? "OK" : "not available – using polling") << ")\n";
 
     return true;
 }
@@ -106,19 +112,27 @@ bool IRSDKManager::waitForData(int timeoutMS) {
 
     bool newData = false;
 
+    // Prefer event when available (low CPU usage)
     if (m_hDataValidEvent) {
         DWORD result = WaitForSingleObject(m_hDataValidEvent, timeoutMS);
-        newData = (result == WAIT_OBJECT_0);
-    } else {
-        // Polling: comparar tick actual con el último conocido
-        int currentTick = getLatestTickCount();
-        newData = (currentTick > m_lastTickCount);
+        if (result == WAIT_OBJECT_0) {
+            newData = true;
+        }
+    }
+
+    // Always double-check with tick count (makes it reliable like irdashies)
+    int currentTick = getLatestTickCount();
+    if (currentTick > m_lastTickCount || m_lastTickCount < 0) {
+        newData = true;
     }
 
     if (newData) {
-        // Actualizar índice del buffer más reciente
         updateLatestBufferIndex();
         m_lastTickCount = m_pHeader->varBuf[m_latestBufIndex].tickCount;
+        // Optional: update session info version if changed
+        if (m_pHeader->sessionInfoUpdate != m_sessionInfoUpdate) {
+            m_sessionInfoUpdate = m_pHeader->sessionInfoUpdate;
+        }
         return true;
     }
 
