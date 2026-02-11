@@ -17,7 +17,7 @@ public:
     // Connection
     bool startup();
     void shutdown();
-    bool isConnected() const { return m_connected; }
+    bool isConnected() const;
     bool isSessionActive() const;
 
     // Data access
