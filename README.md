@@ -1,6 +1,6 @@
 # 🏎️ iRacing Overlay
 
-**A professional, transparent overlay for iRacing with real-time telemetry and race position tracking.**
+**Lightweight overlay for iRacing with real-time telemetry and relative positions widgets.**
 
 ---
 
@@ -31,12 +31,9 @@
   - Car brand logo (BMW, Mercedes, Audi, Porsche, Ferrari, Lamborghini, Aston Martin, McLaren, Ford, Chevrolet, Toyota, Mazda)
   - Last lap time
   - Gap relative to player
-- **Player row highlighted with green background**
-- **Drivers in pits shown grayed out**
-- **Configurable transparency**
 
 #### 2. **Telemetry**
-- Horizontal history graphs (3 seconds)
+- Horizontal history graphs
 - Throttle (green)
 - Brake (red)
 - Real-time updates at 60Hz
@@ -60,7 +57,7 @@
 | Key | Action |
 |-----|--------|
 | **Q** | Quit overlay |
-| **L** | Toggle Lock (enable/disable click-through) |
+| **L** | Toggle Lock/Unlock (enable/disable dragging) |
 | **Drag** | Move widgets (when unlocked) |
 
 ---
@@ -115,9 +112,9 @@ iRacingOverlay.exe
 
 ### First Time Setup
 
-1. Start the overlay (unlocked by default)
+1. Start the overlay
 2. Drag widgets to your preferred positions
-3. Press **L** to lock (enable click-through)
+3. Press **L** to lock
 4. Positions auto-save when you quit
 
 ---
@@ -146,7 +143,7 @@ iracing_overlay_cpp/
 │   ├── imgui/
 │   ├── glfw/
 │   └── glad/
-├── assets/                   # Optional assets
+├── assets/                   #
 │   └── car_brands/           # PNG logos
 ├── .gitignore
 ├── CMakeLists.txt            # Build system
@@ -163,62 +160,6 @@ iracing_overlay_cpp/
 - **GLFW** 3.3.8 - Window management (with native Win32 access)
 - **GLAD** - OpenGL loader
 - **iRacing SDK** - Official telemetry API
-
----
-
-## 🎨 Optional Assets
-
-### Car Brand Logos
-
-To display brand logos, place PNG images (128x128 recommended) in:
-
-```
-assets/car_brands/
-├── bmw.png
-├── mercedes.png
-├── audi.png
-├── porsche.png
-├── ferrari.png
-├── lamborghini.png
-├── aston_martin.png
-├── mclaren.png
-├── ford.png
-├── chevrolet.png
-├── toyota.png
-└── mazda.png
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Overlay not showing above iRacing
-- Make sure you run the overlay BEFORE starting iRacing
-- Press `L` to ensure it's locked (always-on-top)
-
-### Widgets not saving positions
-- Make sure the overlay has write permissions in its directory
-- Check that `config.ini` is being created on exit
-
-### Click-through not working
-- Only works on Windows
-- Make sure you pressed `L` to lock
-- You should see "🔒 LOCKED" indicator
-
----
-
-## ⚠️ Disclaimer
-
-This project uses only the official iRacing SDK API.
-Does not modify game files or use memory injection.
-**100% allowed** according to iRacing terms of service.
-
-
----
-
-## 📜 License
-
-MIT License - Free for personal and commercial use
 
 ---
 
