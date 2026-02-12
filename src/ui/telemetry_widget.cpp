@@ -337,11 +337,7 @@ void TelemetryWidget::renderABS(float width, float height) {
 
     // If we have a valid texture, render it
     if (textureToUse != 0) {
-        // FIXED: Flip vertically and maintain aspect ratio
-        float texWidth = 128.0f;  // Assuming 128x128 texture
-        float texHeight = 128.0f;
-        
-        // Calculate dimensions to maintain aspect ratio and fit in available space
+        // FIXED: 180° rotation and maintain aspect ratio - NO background
         float targetSize = std::min(width, height);
         float xOffset = (width - targetSize) * 0.5f;
         float yOffset = (height - targetSize) * 0.5f;
@@ -349,9 +345,9 @@ void TelemetryWidget::renderABS(float width, float height) {
         ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
         ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
 
-        // Flip vertically and horizontally
-        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
-        ImVec2 uv1(0.0f, 0.0f);  // Top-left (flipped)
+        // 180° rotation: swap top-left and bottom-right corners
+        ImVec2 uv0(0.0f, 0.0f);  // Top-left
+        ImVec2 uv1(1.0f, 1.0f);  // Bottom-right (rotated 180°)
 
         dl->AddImage((ImTextureID)(intptr_t)textureToUse, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
@@ -397,9 +393,20 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
     float barBottom = p.y + height;
     float barH = barBottom - barTop;
 
+    // FIXED: Throttle and Brake 5px wider each, Clutch stays same
     for (int i = 0; i < 3; i++) {
         float columnW = width / 3.0f;
-        float barW = columnW * 0.6f;
+        
+        // Adjust bar width: Throttle and Brake get +5px, Clutch stays normal
+        float barW;
+        if (i == 0 || i == 1) {
+            // Throttle and Brake: 5px wider
+            barW = columnW * 0.6f + 5.0f * m_scale;
+        } else {
+            // Clutch: stays the same
+            barW = columnW * 0.6f;
+        }
+        
         float x = p.x + i * columnW + (columnW - barW) * 0.5f;
 
         // Background bar
@@ -503,18 +510,18 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
         gearLabel = gearStr;
     }
 
-    // FIXED: Gear box with white text on black background (same as speed)
+    // FIXED: Gear box with dark semi-transparent border matching widget background
     float boxW = width * 0.5f;
     float boxH = height * 0.35f;
     ImVec2 gearTopLeft = ImVec2(p.x + (width - boxW) * 0.5f, p.y + height * 0.1f);
     
-    // Black background
+    // Black background fill
     dl->AddRectFilled(gearTopLeft, ImVec2(gearTopLeft.x + boxW, gearTopLeft.y + boxH),
                       IM_COL32(0, 0, 0, 220));
     
-    // White border
+    // Dark semi-transparent border (matching widget background color)
     dl->AddRect(gearTopLeft, ImVec2(gearTopLeft.x + boxW, gearTopLeft.y + boxH),
-                IM_COL32(255, 255, 255, 255), 0.0f, 0, 1.0f);
+                IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
 
     // Gear text (white, large, centered)
     ImVec2 gearSize = ImGui::CalcTextSize(gearLabel);
@@ -546,11 +553,7 @@ void TelemetryWidget::renderSteering(float width, float height) {
 
     // If we have a texture, render it
     if (m_steeringTexture != 0) {
-        // FIXED: Flip vertically and maintain aspect ratio
-        float texWidth = 128.0f;  // Assuming 128x128 texture
-        float texHeight = 128.0f;
-        
-        // Calculate dimensions to maintain aspect ratio and fit in available space
+        // FIXED: 180° rotation and maintain aspect ratio
         float targetSize = std::min(width, height);
         float xOffset = (width - targetSize) * 0.5f;
         float yOffset = (height - targetSize) * 0.5f;
@@ -558,9 +561,9 @@ void TelemetryWidget::renderSteering(float width, float height) {
         ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
         ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
 
-        // Flip vertically and horizontally
-        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
-        ImVec2 uv1(0.0f, 0.0f);  // Top-left (flipped)
+        // 180° rotation: swap top-left and bottom-right corners
+        ImVec2 uv0(0.0f, 0.0f);  // Top-left
+        ImVec2 uv1(1.0f, 1.0f);  // Bottom-right (rotated 180°)
 
         dl->AddImage((ImTextureID)(intptr_t)m_steeringTexture, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
