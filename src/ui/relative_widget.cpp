@@ -2,18 +2,10 @@
 #include "data/relative_calc.h"
 #include "data/irsdk_manager.h"
 #include "utils/config.h"
-#include "imgui.h"
-#include "ui/overlay_window.h"
+#include <imgui.h>
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
-#include <cctype>
-#include <filesystem>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-namespace fs = std::filesystem;
 
 namespace ui {
 
@@ -189,13 +181,8 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
     // === Col 2: Car Brand Logo ===
     ImGui::TableNextColumn();
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
-    // Try to load and display logo
-    void* logoTexture = getCarBrandTexture(driver.carBrand);
-    if (logoTexture) {
-        ImGui::Image(logoTexture, ImVec2(16.0f * m_scale, 16.0f * m_scale));
-    } else {
-        ImGui::Dummy(ImVec2(16.0f * m_scale, 16.0f * m_scale));
-    }
+    // Space reserved for logo
+    ImGui::Dummy(ImVec2(16.0f * m_scale, 16.0f * m_scale));
 
     // === Col 3: Flag + #Number + Name ===
     ImGui::TableNextColumn();
@@ -395,70 +382,28 @@ void RelativeWidget::getSafetyRatingColor(float sr, float& r, float& g, float& b
 }
 
 const char* RelativeWidget::getClubFlag(const std::string& club) {
-    // Simple mapping for common country codes
-    static const std::unordered_map<std::string, const char*> flagMap = {
-        {"US", "🇺🇸"}, {"GB", "🇬🇧"}, {"DE", "🇩🇪"}, {"FR", "🇫🇷"},
-        {"ES", "🇪🇸"}, {"IT", "🇮🇹"}, {"NL", "🇳🇱"}, {"SE", "🇸🇪"},
-        {"NO", "🇳🇴"}, {"DK", "🇩🇰"}, {"FI", "🇫🇮"}, {"CA", "🇨🇦"},
-        {"AU", "🇦🇺"}, {"BR", "🇧🇷"}, {"JP", "🇯🇵"}, {"KR", "🇰🇷"},
-        {"MX", "🇲🇽"}, {"ZA", "🇿🇦"}, {"NZ", "🇳🇿"}, {"SG", "🇸🇬"},
-    };
-
-    auto it = flagMap.find(club);
-    if (it != flagMap.end()) {
-        return it->second;
-    }
+    // Simple mapping for common country codes to flag emoji
+    if (club == "US") return "🇺🇸";
+    if (club == "GB") return "🇬🇧";
+    if (club == "DE") return "🇩🇪";
+    if (club == "FR") return "🇫🇷";
+    if (club == "ES") return "🇪🇸";
+    if (club == "IT") return "🇮🇹";
+    if (club == "NL") return "🇳🇱";
+    if (club == "SE") return "🇸🇪";
+    if (club == "NO") return "🇳🇴";
+    if (club == "DK") return "🇩🇰";
+    if (club == "FI") return "🇫🇮";
+    if (club == "CA") return "🇨🇦";
+    if (club == "AU") return "🇦🇺";
+    if (club == "BR") return "🇧🇷";
+    if (club == "JP") return "🇯🇵";
+    if (club == "KR") return "🇰🇷";
+    if (club == "MX") return "🇲🇽";
+    if (club == "ZA") return "🇿🇦";
+    if (club == "NZ") return "🇳🇿";
+    if (club == "SG") return "🇸🇬";
     return "";
-}
-
-bool RelativeWidget::loadCarBrandLogo(const std::string& brand) {
-    // Create normalized brand name for filename
-    std::string normalized = brand;
-    for (auto& c : normalized) {
-        c = std::tolower(static_cast<unsigned char>(c));
-    }
-
-    // Try multiple paths and extensions
-    std::vector<std::string> possiblePaths = {
-        "assets/car_brands/" + normalized + ".png",
-        "assets/car_brands/" + brand + ".png",
-        "./assets/car_brands/" + normalized + ".png",
-        "./assets/car_brands/" + brand + ".png",
-    };
-
-    for (const auto& path : possiblePaths) {
-        if (fs::exists(path)) {
-            // Load image with stb_image
-            int width, height, channels;
-            unsigned char* imageData = stbi_load(path.c_str(), &width, &height, &channels, 4);
-            if (imageData) {
-                // Here you would create a texture with OpenGL/graphics API
-                // For now, return null - implementation depends on your graphics backend
-                stbi_image_free(imageData);
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-void* RelativeWidget::getCarBrandTexture(const std::string& brand) {
-    // Check cache first
-    auto it = m_logoCache.find(brand);
-    if (it != m_logoCache.end()) {
-        return it->second;
-    }
-
-    // Try to load if not in cache
-    if (loadCarBrandLogo(brand)) {
-        // In a real implementation, you'd store the actual texture pointer
-        // For now, return a placeholder
-        m_logoCache[brand] = nullptr;  // Would be the texture pointer
-        return nullptr;
-    }
-
-    return nullptr;
 }
 
 }  // namespace ui

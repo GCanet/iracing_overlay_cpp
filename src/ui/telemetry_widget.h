@@ -5,7 +5,7 @@
 #include <cstdint>
 
 namespace idata {
-struct TelemetryData;
+    struct TelemetryData;
 }
 
 namespace ui {

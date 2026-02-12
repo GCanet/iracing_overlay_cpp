@@ -1,5 +1,6 @@
-#include "telemetry_widget.h"
-#include "../data/irsdk_manager.h"
+#include "ui/telemetry_widget.h"
+#include "data/irsdk_manager.h"
+#include "utils/config.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -10,12 +11,11 @@ TelemetryWidget::TelemetryWidget()
     : m_currentRPM(0.0f), m_maxRPM(7000.0f), m_blinkRPM(6500.0f),
       m_throttle(0.0f), m_brake(0.0f), m_clutch(0.0f), m_gear(0), m_speed(0),
       m_steeringAngle(0.0f), m_steeringAngleMax(180.0f),
-      m_absActive(false), m_scale(1.0f) {
+      m_absActive(false), m_scale(1.0f), m_historyHead(0) {
     // Initialize history buffers
     m_throttleHistory.resize(256, 0.0f);
     m_brakeHistory.resize(256, 0.0f);
     m_clutchHistory.resize(256, 0.0f);
-    m_historyHead = 0;
 }
 
 TelemetryWidget::~TelemetryWidget() {}
