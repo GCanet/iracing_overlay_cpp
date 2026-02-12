@@ -78,8 +78,8 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
         m_blinkRPM = sdk->getFloat("DriverCarSLBlinkRPM", 6500.0f);
         m_throttle = sdk->getFloat("Throttle", 0.0f);
         m_brake = sdk->getFloat("Brake", 0.0f);
-        // Use real pedal clutch (0% = released, 100% = fully pressed) for launch control
-        m_clutch = sdk->getFloat("ClutchRaw", 0.0f);
+        // Use real pedal clutch inverted (0% = pressed, 100% = released) for launch control
+        m_clutch = 1.0f - sdk->getFloat("ClutchRaw", 0.0f);
         m_gear = sdk->getInt("Gear", 0);
         // Speed: iRacing gives m/s, convert to km/h
         m_speed = static_cast<int>(sdk->getFloat("Speed", 0.0f) * 3.6f);
@@ -184,7 +184,7 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float rpmPct = (m_maxRPM > 0 && m_currentRPM > 0) ? (m_currentRPM / m_maxRPM) : 0.0f;
+    float rpmPct = (m_maxRPM > 0) ? (m_currentRPM / m_maxRPM) : 0.0f;
     float blinkPct = (m_maxRPM > 0) ? (m_blinkRPM / m_maxRPM) : 0.8f;
 
     bool blink = std::fmod(ImGui::GetTime() * 2.5f, 1.0f) < 0.5f;
@@ -202,7 +202,7 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
 
         // Draw filled circle if RPM exceeds this light's threshold
         float threshold = (i + 1) / 10.0f;
-        if (rpmPct > 0 && rpmPct >= threshold) {
+        if (rpmPct >= threshold) {
             // Light is active - use color pattern
             if (i < 2) {
                 lightCol = IM_COL32(0, 180, 0, 220);  // Green
@@ -289,13 +289,13 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
             dl->AddRectFilled(ImVec2(x, barBottom - filledH), ImVec2(x + barW, barBottom), colors[i]);
         }
 
-        // Numeric value on top of bar (above the bar area)
+        // Numeric value on top of bar (above the bar area) - MUCH HIGHER
         char buf[8];
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
         ImVec2 ts = ImGui::CalcTextSize(buf);
         float textX = x + (barW - ts.x) * 0.5f;
-        float textY = barTop - ts.y - 1.0f * m_scale;
-        if (textY < p.y) textY = p.y;
+        float textY = barTop - ts.y - 8.0f * m_scale;  // Increased from 1.0f to 8.0f
+        if (textY < p.y - ts.y) textY = p.y - ts.y;
         dl->AddText(ImVec2(textX, textY), colors[i], buf);
     }
 
