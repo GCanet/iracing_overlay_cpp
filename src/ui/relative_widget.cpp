@@ -3,19 +3,69 @@
 #include "data/irsdk_manager.h"
 #include "utils/config.h"
 #include <imgui.h>
+#include <glad/glad.h>
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
+
+// stb_image.h included for declaration only — STB_IMAGE_IMPLEMENTATION lives in telemetry_widget.cpp
+#include "stb_image.h"
 
 namespace ui {
 
 RelativeWidget::RelativeWidget(OverlayWindow* overlay)
     : m_overlay(overlay)
 {
+    loadCarBrandTextures();
 }
 
 RelativeWidget::~RelativeWidget() {
-    // Clean up any loaded textures if needed
+    for (auto& [brand, texId] : m_carBrandTextures) {
+        if (texId) glDeleteTextures(1, &texId);
+    }
+    m_carBrandTextures.clear();
+}
+
+unsigned int RelativeWidget::loadTextureFromFile(const char* filepath) {
+    unsigned int textureID = 0;
+    int width, height, channels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
+    if (!data) return 0;
+
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return textureID;
+}
+
+void RelativeWidget::loadCarBrandTextures() {
+    // Try to load each known brand PNG from assets/car_brands/
+    static const char* brands[] = {
+        "bmw", "mercedes", "audi", "porsche", "ferrari", "lamborghini",
+        "aston_martin", "mclaren", "ford", "chevrolet", "toyota", "mazda"
+    };
+
+    for (const char* brand : brands) {
+        char path[256];
+        snprintf(path, sizeof(path), "assets/car_brands/%s.png", brand);
+        unsigned int tex = loadTextureFromFile(path);
+        if (tex) {
+            m_carBrandTextures[brand] = tex;
+        }
+    }
+}
+
+unsigned int RelativeWidget::getCarBrandTexture(const std::string& brand) const {
+    auto it = m_carBrandTextures.find(brand);
+    return (it != m_carBrandTextures.end()) ? it->second : 0;
 }
 
 void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode) {
@@ -82,7 +132,7 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
         // Setup columns with adjusted widths
         ImGui::TableSetupColumn("Pos", ImGuiTableColumnFlags_WidthFixed, 28.0f * m_scale);
         ImGui::TableSetupColumn("Logo", ImGuiTableColumnFlags_WidthFixed, 22.0f * m_scale);
-        ImGui::TableSetupColumn("Driver", ImGuiTableColumnFlags_WidthStretch);  // More room for driver info
+        ImGui::TableSetupColumn("Driver", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("SR", ImGuiTableColumnFlags_WidthFixed, 52.0f * m_scale);
         ImGui::TableSetupColumn("iR", ImGuiTableColumnFlags_WidthFixed, 60.0f * m_scale);
         ImGui::TableSetupColumn("Last", ImGuiTableColumnFlags_WidthFixed, 54.0f * m_scale);
@@ -115,10 +165,9 @@ void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
     std::string lapInfo = relative->getLapInfo();
     int sof = relative->getSOF();
 
-    // Make text bold by using a larger font size and center everything
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 4));
 
-    // Left side: Series name (more room)
+    // Left side: Series name
     ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "%s", series.c_str());
     ImGui::SameLine(0, 16);
 
@@ -181,8 +230,20 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
     // === Col 2: Car Brand Logo ===
     ImGui::TableNextColumn();
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
-    // Space reserved for logo
-    ImGui::Dummy(ImVec2(16.0f * m_scale, 16.0f * m_scale));
+    {
+        float logoSize = 16.0f * m_scale;
+        unsigned int tex = getCarBrandTexture(driver.carBrand);
+        if (tex) {
+            ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(logoSize, logoSize));
+        } else {
+            // No texture: show a small colored square as placeholder
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 cp = ImGui::GetCursorScreenPos();
+            dl->AddRectFilled(cp, ImVec2(cp.x + logoSize, cp.y + logoSize),
+                             IM_COL32(60, 60, 60, 150), 2.0f);
+            ImGui::Dummy(ImVec2(logoSize, logoSize));
+        }
+    }
 
     // === Col 3: Flag + #Number + Name ===
     ImGui::TableNextColumn();
@@ -208,7 +269,6 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
     }
 
     // === Col 4: Safety Rating ===
-    // Color boxes: darker for license letter, lighter for SR value
     ImGui::TableNextColumn();
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.1f);
     {
@@ -216,7 +276,6 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         getSafetyRatingColor(driver.safetyRating, r, g, b);
         const char* letter = getSafetyRatingLetter(driver.safetyRating);
 
-        // SR value (lighter color box)
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImVec2 cp = ImGui::GetCursorScreenPos();
         ImVec2 textSize = ImGui::CalcTextSize("9.9");
@@ -245,7 +304,6 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         textSize = ImGui::CalcTextSize("A");
         boxW = textSize.x + 6.0f;
 
-        // Darker background for license letter
         ImU32 darkBgCol = IM_COL32(
             (int)(r * 255 * 0.8f),
             (int)(g * 255 * 0.8f),
@@ -254,7 +312,6 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         );
         dl->AddRectFilled(ImVec2(cp.x, cp.y), ImVec2(cp.x + boxW, cp.y + boxH), darkBgCol, 2.0f);
 
-        // License letter text (white, bold)
         textPos = ImVec2(cp.x + boxW * 0.5f - textSize.x * 0.5f, cp.y + boxH * 0.5f - textSize.y * 0.5f);
         dl->AddText(textPos, IM_COL32(255, 255, 255, 255), letter);
 
@@ -382,27 +439,26 @@ void RelativeWidget::getSafetyRatingColor(float sr, float& r, float& g, float& b
 }
 
 const char* RelativeWidget::getClubFlag(const std::string& club) {
-    // Simple mapping for common country codes to flag emoji
-    if (club == "US") return "🇺🇸";
-    if (club == "GB") return "🇬🇧";
-    if (club == "DE") return "🇩🇪";
-    if (club == "FR") return "🇫🇷";
-    if (club == "ES") return "🇪🇸";
-    if (club == "IT") return "🇮🇹";
-    if (club == "NL") return "🇳🇱";
-    if (club == "SE") return "🇸🇪";
-    if (club == "NO") return "🇳🇴";
-    if (club == "DK") return "🇩🇰";
-    if (club == "FI") return "🇫🇮";
-    if (club == "CA") return "🇨🇦";
-    if (club == "AU") return "🇦🇺";
-    if (club == "BR") return "🇧🇷";
-    if (club == "JP") return "🇯🇵";
-    if (club == "KR") return "🇰🇷";
-    if (club == "MX") return "🇲🇽";
-    if (club == "ZA") return "🇿🇦";
-    if (club == "NZ") return "🇳🇿";
-    if (club == "SG") return "🇸🇬";
+    if (club == "US") return "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8";
+    if (club == "GB") return "\xF0\x9F\x87\xAC\xF0\x9F\x87\xA7";
+    if (club == "DE") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xAA";
+    if (club == "FR") return "\xF0\x9F\x87\xAB\xF0\x9F\x87\xB7";
+    if (club == "ES") return "\xF0\x9F\x87\xAA\xF0\x9F\x87\xB8";
+    if (club == "IT") return "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB9";
+    if (club == "NL") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB1";
+    if (club == "SE") return "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAA";
+    if (club == "NO") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB4";
+    if (club == "DK") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xB0";
+    if (club == "FI") return "\xF0\x9F\x87\xAB\xF0\x9F\x87\xAE";
+    if (club == "CA") return "\xF0\x9F\x87\xA8\xF0\x9F\x87\xA6";
+    if (club == "AU") return "\xF0\x9F\x87\xA6\xF0\x9F\x87\xBA";
+    if (club == "BR") return "\xF0\x9F\x87\xA7\xF0\x9F\x87\xB7";
+    if (club == "JP") return "\xF0\x9F\x87\xAF\xF0\x9F\x87\xB5";
+    if (club == "KR") return "\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7";
+    if (club == "MX") return "\xF0\x9F\x87\xB2\xF0\x9F\x87\xBD";
+    if (club == "ZA") return "\xF0\x9F\x87\xBF\xF0\x9F\x87\xA6";
+    if (club == "NZ") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xBF";
+    if (club == "SG") return "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAC";
     return "";
 }
 

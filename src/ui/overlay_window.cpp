@@ -47,7 +47,7 @@ bool OverlayWindow::initialize() {
     glfwSetWindowPos(m_window, 0, 0);
 
     glfwMakeContextCurrent(m_window);
-    glfwSwapInterval(0);  // No vsync - run as fast as possible
+    glfwSwapInterval(1);  // VSync on - saves CPU, 60fps is plenty for an overlay
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         glfwDestroyWindow(m_window);
@@ -58,12 +58,13 @@ bool OverlayWindow::initialize() {
     setupImGui();
     setupStyle();
 
+    // Load config before creating widgets (they read config on construction)
+    utils::Config::load("config.ini");
+
     m_sdk = std::make_unique<iracing::IRSDKManager>();
     m_relative = std::make_unique<iracing::RelativeCalculator>(m_sdk.get());
     m_relativeWidget = std::make_unique<RelativeWidget>(this);
     m_telemetryWidget = std::make_unique<TelemetryWidget>(this);
-
-    utils::Config::load("config.ini");
 
     m_running = true;
     applyWindowAttributes();
@@ -157,7 +158,7 @@ void OverlayWindow::renderFrame() {
 
     // Render widgets only
     m_relativeWidget->render(m_relative.get(), m_editMode);
-    
+
     auto& telemetryConfig = utils::Config::getTelemetryConfig();
     m_telemetryWidget->render(m_sdk.get(), telemetryConfig, m_editMode);
 
