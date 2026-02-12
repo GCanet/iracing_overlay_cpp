@@ -42,7 +42,7 @@ namespace ui {
         OverlayWindow* m_overlay;
 
         // Asset textures (OpenGL texture IDs)
-        // Place PNG files at: assets/telemetry/steering_wheel.png (128x128)
+        // Place PNG files at: assets/telemetry/steer_wheel.png (128x128)
         //                     assets/telemetry/abs_on.png (128x128)
         //                     assets/telemetry/abs_off.png (128x128)
         unsigned int m_steeringTexture;

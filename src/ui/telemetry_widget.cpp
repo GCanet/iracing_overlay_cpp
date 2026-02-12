@@ -63,7 +63,7 @@ unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
 }
 
 void TelemetryWidget::loadAssets() {
-    m_steeringTexture = loadTextureFromFile("assets/telemetry/steering_wheel.png");
+    m_steeringTexture = loadTextureFromFile("assets/telemetry/steer_wheel.png");
     m_absOnTexture = loadTextureFromFile("assets/telemetry/abs_on.png");
     m_absOffTexture = loadTextureFromFile("assets/telemetry/abs_off.png");
 }
@@ -228,29 +228,45 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
 }
 
 // =============================================================================
-// ABS - Circle with parentheses or icon
+// ABS - Asset texture or fallback circle with text
 // =============================================================================
 void TelemetryWidget::renderABS(float width, float height) {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float cx = p.x + width * 0.5f;
-    float cy = p.y + height * 0.5f;
-    float radius = std::min(width, height) * 0.35f;
+    // Determine which texture to display
+    unsigned int textureToUse = m_absActive ? m_absOnTexture : m_absOffTexture;
 
-    ImU32 absCol = m_absActive ?
-        IM_COL32(255, 100, 0, 220) : IM_COL32(80, 80, 80, 180);
+    if (textureToUse != 0) {
+        // Display asset texture
+        float imgSize = std::min(width, height) * 0.85f;
+        float imgX = p.x + (width - imgSize) * 0.5f;
+        float imgY = p.y + (height - imgSize) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(imgX, imgY));
+        ImGui::Image((ImTextureID)(intptr_t)textureToUse, ImVec2(imgSize, imgSize));
+        
+        // Reset cursor for proper layout
+        ImGui::SetCursorScreenPos(ImVec2(p.x + width, p.y));
+        ImGui::Dummy(ImVec2(0, height));
+    } else {
+        // Fallback: draw procedural circle with ABS text
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float cx = p.x + width * 0.5f;
+        float cy = p.y + height * 0.5f;
+        float radius = std::min(width, height) * 0.35f;
 
-    // Draw circle
-    dl->AddCircle(ImVec2(cx, cy), radius, absCol, 12, 2.0f * m_scale);
+        ImU32 absCol = m_absActive ? IM_COL32(255, 100, 0, 220) : IM_COL32(80, 80, 80, 180);
 
-    // Draw "ABS" text inside circle
-    char absBuf[] = "ABS";
-    ImVec2 textSize = ImGui::CalcTextSize(absBuf);
-    ImVec2 textPos = ImVec2(cx - textSize.x * 0.5f, cy - textSize.y * 0.5f);
-    dl->AddText(textPos, absCol, absBuf);
+        // Draw circle
+        dl->AddCircle(ImVec2(cx, cy), radius, absCol, 12, 2.0f * m_scale);
 
-    ImGui::Dummy(ImVec2(width, height));
+        // Draw "ABS" text inside circle
+        char absBuf[] = "ABS";
+        ImVec2 textSize = ImGui::CalcTextSize(absBuf);
+        ImVec2 textPos = ImVec2(cx - textSize.x * 0.5f, cy - textSize.y * 0.5f);
+        dl->AddText(textPos, absCol, absBuf);
+
+        ImGui::Dummy(ImVec2(width, height));
+    }
 }
 
 // =============================================================================
@@ -345,32 +361,27 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
             int idx1 = (m_historyHead + i + 1) % 256;
             float x1 = p.x + i * pixelW;
             float x2 = p.x + (i + 1) * pixelW;
-            float y1 = p.y + height * (1.0f - history[idx0] / 100.0f);
-            float y2 = p.y + height * (1.0f - history[idx1] / 100.0f);
+            float y1 = p.y + height - (history[idx0] / 100.0f) * height;
+            float y2 = p.y + height - (history[idx1] / 100.0f) * height;
             dl->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), color, traceThickness);
         }
     };
 
-    // Draw order: brake (back), throttle (front) - NO CLUTCH
-    drawTrace(m_brakeHistory, IM_COL32(255, 40, 40, 220));
-    drawTrace(m_throttleHistory, IM_COL32(0, 220, 0, 220));
+    drawTrace(m_throttleHistory, IM_COL32(0, 220, 0, 220));     // Green throttle
+    drawTrace(m_brakeHistory, IM_COL32(255, 40, 40, 220));      // Red brake
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
 // =============================================================================
-// GEAR + SPEED - Large gear number, speed below with "km/h" label
-// Like iRdashies: big gear, speed + unit below (increased font sizes)
+// GEAR + SPEED + km/h - Vertical stack, right-aligned
 // =============================================================================
 void TelemetryWidget::renderGearSpeed(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
+    // Gear (top): single character, larger
     char gearBuf[8];
-    char speedBuf[16];
-    char unitBuf[] = "km/h";
-
-    // Format gear
     if (m_gear == 0) {
         snprintf(gearBuf, sizeof(gearBuf), "N");
     } else if (m_gear == -1) {
@@ -379,25 +390,20 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
         snprintf(gearBuf, sizeof(gearBuf), "%d", m_gear);
     }
 
-    snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
-
-    // Gear: large, centered, top portion - MOVED UP 15 pixels, increase size by 2px
-    float gearFontSize = height * 0.58f + 2.0f * m_scale;  // INCREASED by 2 pixels
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
+    float gearFontSize = height * 0.30f;  // 30% of row height - INCREASED by 2px
     float gearScale = gearFontSize / gearSize.y;
     float gearX = p.x + (width - gearSize.x * gearScale) * 0.5f;
-    float gearY = p.y + 2.0f * m_scale - 15.0f * m_scale + 4.0f * m_scale;  // MOVED DOWN 4 pixels
+    float gearY = p.y + height * 0.05f;
 
-    // Gear color: white, neutral = orange, reverse = red
-    ImU32 gearCol = IM_COL32(255, 255, 255, 255);
-    if (m_gear == 0) gearCol = IM_COL32(255, 165, 0, 255);  // N = orange
-    else if (m_gear == -1) gearCol = IM_COL32(255, 60, 60, 255); // R = red
-
-    // Draw gear text UNBOLD (regular weight)
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale,
-                ImVec2(gearX, gearY), gearCol, gearBuf);
+                ImVec2(gearX, gearY), IM_COL32(255, 255, 255, 255), gearBuf);
 
-    // Speed: medium, below gear - increase size by 2px
+    // Speed (middle): larger number, sized by 2px
+    char speedBuf[8];
+    snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
+
+    // Font size by 2px
     float speedFontSize = height * 0.28f + 2.0f * m_scale;  // INCREASED by 2 pixels
     ImVec2 speedSize = ImGui::CalcTextSize(speedBuf);
     float speedScale = speedFontSize / speedSize.y;
@@ -408,6 +414,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
                 ImVec2(speedX, speedY), IM_COL32(200, 200, 200, 255), speedBuf);
 
     // "km/h" label: small, below speed - BOLD and increase size by 2px
+    char unitBuf[] = "km/h";
     float unitFontSize = height * 0.18f + 2.0f * m_scale;  // INCREASED by 2 pixels
     ImVec2 unitSize = ImGui::CalcTextSize(unitBuf);
     float unitScale = unitFontSize / unitSize.y;
@@ -421,15 +428,14 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
 }
 
 // =============================================================================
-// STEERING WHEEL - Rotated wheel icon or procedural fallback
+// STEERING WHEEL - Asset texture or procedural fallback
 // Shows actual steering angle with rotation
 // =============================================================================
 void TelemetryWidget::renderSteering(float width, float height) {
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    if (m_steeringTexture) {
-        // With texture: we can't easily rotate ImGui::Image, so use draw list with UV rotation
-        // For simplicity, draw the texture without rotation and overlay a rotation indicator
+    if (m_steeringTexture != 0) {
+        // Display asset texture
         float imgSize = std::min(width, height) * 0.85f;
         float imgX = p.x + (width - imgSize) * 0.5f;
         float imgY = p.y + (height - imgSize) * 0.5f;
