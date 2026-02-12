@@ -337,10 +337,21 @@ void TelemetryWidget::renderABS(float width, float height) {
 
     // If we have a valid texture, render it
     if (textureToUse != 0) {
-        ImVec2 uv0(0.0f, 0.0f);
-        ImVec2 uv1(1.0f, 1.0f);
-        ImVec2 topLeft = p;
-        ImVec2 bottomRight = ImVec2(p.x + width, p.y + height);
+        // FIXED: Flip vertically and maintain aspect ratio
+        float texWidth = 128.0f;  // Assuming 128x128 texture
+        float texHeight = 128.0f;
+        
+        // Calculate dimensions to maintain aspect ratio and fit in available space
+        float targetSize = std::min(width, height);
+        float xOffset = (width - targetSize) * 0.5f;
+        float yOffset = (height - targetSize) * 0.5f;
+
+        ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
+        ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
+
+        // Flip vertically and horizontally
+        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
+        ImVec2 uv1(0.0f, 0.0f);  // Top-left (flipped)
 
         dl->AddImage((ImTextureID)(intptr_t)textureToUse, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
@@ -381,15 +392,15 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
         IM_COL32(0, 150, 255, 255)    // Clutch blue
     };
 
-    float barStartX = p.x;
-    float barTop = p.y + 4.0f * m_scale;
-    float barBottom = p.y + height - 4.0f * m_scale;
+    // FIXED: Match bar height with history trace (start and end at same y positions)
+    float barTop = p.y;
+    float barBottom = p.y + height;
     float barH = barBottom - barTop;
 
     for (int i = 0; i < 3; i++) {
         float columnW = width / 3.0f;
         float barW = columnW * 0.6f;
-        float x = barStartX + i * columnW + (columnW - barW) * 0.5f;
+        float x = p.x + i * columnW + (columnW - barW) * 0.5f;
 
         // Background bar
         dl->AddRectFilled(ImVec2(x, barTop), ImVec2(x + barW, barBottom),
@@ -401,24 +412,29 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
             dl->AddRectFilled(ImVec2(x, barBottom - filledH), ImVec2(x + barW, barBottom), colors[i]);
         }
 
-        // FIXED: Numeric value on top of bar with better spacing to prevent overlap
+        // FIXED: Smaller numeric value on top of bar
         char buf[8];
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
-        ImVec2 ts = ImGui::CalcTextSize(buf);
+        
+        // Use smaller font for pedal percentage values
+        ImVec2 textSize = ImGui::CalcTextSize(buf);
+        textSize.x *= 0.85f;  // Reduce text size by ~15%
+        textSize.y *= 0.85f;
 
         // Center text horizontally within each bar's column space
-        float columnCenterX = barStartX + i * columnW + columnW * 0.5f;
-        float textX = columnCenterX - ts.x * 0.5f;
+        float columnCenterX = p.x + i * columnW + columnW * 0.5f;
+        float textX = columnCenterX - textSize.x * 0.5f;
 
-        // Position numbers higher, with better vertical spacing - INCREASED spacing
-        float textY = barTop - ts.y - 12.0f * m_scale;
+        // Position numbers above bars with consistent spacing
+        float textY = barTop - textSize.y - 4.0f * m_scale;
 
         // Ensure text doesn't go above the widget bounds
-        if (textY < p.y - ts.y - 2.0f * m_scale) {
-            textY = p.y - ts.y - 2.0f * m_scale;
+        if (textY < p.y - textSize.y - 2.0f * m_scale) {
+            textY = p.y - textSize.y - 2.0f * m_scale;
         }
 
-        dl->AddText(ImVec2(textX, textY), colors[i], buf);
+        // Draw smaller text
+        dl->AddText(nullptr, ImGui::GetFontSize() * 0.85f * m_scale, ImVec2(textX, textY), colors[i], buf);
     }
 
     ImGui::Dummy(ImVec2(width, height));
@@ -456,15 +472,15 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
         float x1 = p.x + i * pixelW;
         float x2 = p.x + (i + 1) * pixelW;
 
-        // Throttle (green)
+        // Throttle (green) - FIXED: 2px thicker lines
         float y1_throttle = p.y + height - (m_throttleHistory[idx] / 100.0f) * height;
         float y2_throttle = p.y + height - (m_throttleHistory[nextIdx] / 100.0f) * height;
-        dl->AddLine(ImVec2(x1, y1_throttle), ImVec2(x2, y2_throttle), IM_COL32(0, 220, 0, 200), 1.2f);
+        dl->AddLine(ImVec2(x1, y1_throttle), ImVec2(x2, y2_throttle), IM_COL32(0, 220, 0, 200), 2.0f);
 
-        // Brake (red)
+        // Brake (red) - FIXED: 2px thicker lines
         float y1_brake = p.y + height - (m_brakeHistory[idx] / 100.0f) * height;
         float y2_brake = p.y + height - (m_brakeHistory[nextIdx] / 100.0f) * height;
-        dl->AddLine(ImVec2(x1, y1_brake), ImVec2(x2, y2_brake), IM_COL32(255, 0, 0, 200), 1.2f);
+        dl->AddLine(ImVec2(x1, y1_brake), ImVec2(x2, y2_brake), IM_COL32(255, 0, 0, 200), 2.0f);
     }
 
     ImGui::Dummy(ImVec2(width, height));
@@ -487,28 +503,31 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
         gearLabel = gearStr;
     }
 
-    // Gear box background
-    float boxW = width * 0.4f;
-    float boxH = height * 0.4f;
-    ImVec2 gearTopLeft = ImVec2(p.x + width * 0.3f, p.y + height * 0.15f);
+    // FIXED: Gear box with white text on black background (same as speed)
+    float boxW = width * 0.5f;
+    float boxH = height * 0.35f;
+    ImVec2 gearTopLeft = ImVec2(p.x + (width - boxW) * 0.5f, p.y + height * 0.1f);
+    
+    // Black background
     dl->AddRectFilled(gearTopLeft, ImVec2(gearTopLeft.x + boxW, gearTopLeft.y + boxH),
-                      IM_COL32(50, 50, 50, 200));
-    // FIXED: ImDrawCornerFlags_All is deprecated in ImGui 1.91.6, use 0 instead
+                      IM_COL32(0, 0, 0, 220));
+    
+    // White border
     dl->AddRect(gearTopLeft, ImVec2(gearTopLeft.x + boxW, gearTopLeft.y + boxH),
-                IM_COL32(150, 150, 150, 255), 1.0f, 0, 1.5f);
+                IM_COL32(255, 255, 255, 255), 0.0f, 0, 1.0f);
 
-    // Gear text (large)
+    // Gear text (white, large, centered)
     ImVec2 gearSize = ImGui::CalcTextSize(gearLabel);
     ImVec2 gearPos = ImVec2(gearTopLeft.x + (boxW - gearSize.x) * 0.5f,
                             gearTopLeft.y + (boxH - gearSize.y) * 0.5f);
     dl->AddText(nullptr, ImGui::GetFontSize() * 1.4f * m_scale, gearPos,
                 IM_COL32(255, 255, 255, 255), gearLabel);
 
-    // Speed and km/h below
+    // Speed and km/h below (centered with gear box)
     char speedStr[16];
     snprintf(speedStr, sizeof(speedStr), "%d", m_speed);
     ImVec2 speedSize = ImGui::CalcTextSize(speedStr);
-    ImVec2 speedPos = ImVec2(p.x + (width - speedSize.x) * 0.5f, p.y + height * 0.6f);
+    ImVec2 speedPos = ImVec2(p.x + (width - speedSize.x) * 0.5f, p.y + height * 0.55f);
     dl->AddText(speedPos, IM_COL32(200, 200, 200, 255), speedStr);
 
     ImVec2 kmhSize = ImGui::CalcTextSize("km/h");
@@ -527,10 +546,21 @@ void TelemetryWidget::renderSteering(float width, float height) {
 
     // If we have a texture, render it
     if (m_steeringTexture != 0) {
-        ImVec2 uv0(0.0f, 0.0f);
-        ImVec2 uv1(1.0f, 1.0f);
-        ImVec2 topLeft = p;
-        ImVec2 bottomRight = ImVec2(p.x + width, p.y + height);
+        // FIXED: Flip vertically and maintain aspect ratio
+        float texWidth = 128.0f;  // Assuming 128x128 texture
+        float texHeight = 128.0f;
+        
+        // Calculate dimensions to maintain aspect ratio and fit in available space
+        float targetSize = std::min(width, height);
+        float xOffset = (width - targetSize) * 0.5f;
+        float yOffset = (height - targetSize) * 0.5f;
+
+        ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
+        ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
+
+        // Flip vertically and horizontally
+        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
+        ImVec2 uv1(0.0f, 0.0f);  // Top-left (flipped)
 
         dl->AddImage((ImTextureID)(intptr_t)m_steeringTexture, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
