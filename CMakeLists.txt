@@ -8,7 +8,7 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
-project(iRacingOverlay VERSION 1.0.0 LANGUAGES CXX)
+project(iRacingOverlay VERSION 1.0.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -109,6 +109,7 @@ set(APP_SOURCES
     src/data/irating_calc.cpp
     src/utils/config.cpp
     src/utils/yaml_parser.cpp
+    src/stb_impl.cpp  # FIXED: Dedicated STB implementation file
 )
 
 add_executable(iRacingOverlay ${APP_SOURCES})

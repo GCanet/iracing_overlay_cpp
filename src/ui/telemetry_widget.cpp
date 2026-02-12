@@ -7,7 +7,7 @@
 #include <cmath>
 #include <algorithm>
 
-#define STB_IMAGE_IMPLEMENTATION
+// FIXED: Removed STB_IMAGE_IMPLEMENTATION - now in dedicated stb_impl.cpp
 #include <stb_image.h>
 
 #include <glad/glad.h>
@@ -461,8 +461,9 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     ImVec2 gearTopLeft = ImVec2(p.x + width * 0.3f, p.y + height * 0.15f);
     dl->AddRectFilled(gearTopLeft, ImVec2(gearTopLeft.x + boxW, gearTopLeft.y + boxH),
                       IM_COL32(50, 50, 50, 200));
+    // FIXED: ImDrawCornerFlags_All is deprecated in ImGui 1.91.6, use 0 instead
     dl->AddRect(gearTopLeft, ImVec2(gearTopLeft.x + boxW, gearTopLeft.y + boxH),
-                IM_COL32(150, 150, 150, 255), 1.0f, ImDrawCornerFlags_All, 1.5f);
+                IM_COL32(150, 150, 150, 255), 1.0f, 0, 1.5f);
 
     // Gear text (large)
     ImVec2 gearSize = ImGui::CalcTextSize(gearLabel);
