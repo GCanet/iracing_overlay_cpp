@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <glad/glad.h>
+#include <iostream>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -38,12 +39,15 @@ unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
     unsigned int textureID = 0;
 
     int width, height, channels;
-    stbi_set_flip_vertically_on_load(true);
+    stbi_set_flip_vertically_on_load(false);  // FIXED: Don't flip for UI textures
     unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
 
     if (!data) {
+        std::cerr << "[Telemetry] Failed to load texture: " << filepath << std::endl;
         return 0;
     }
+
+    std::cout << "[Telemetry] Loaded texture: " << filepath << " (" << width << "x" << height << ")" << std::endl;
 
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
@@ -63,9 +67,14 @@ unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
 }
 
 void TelemetryWidget::loadAssets() {
+    std::cout << "[Telemetry] Loading assets..." << std::endl;
     m_steeringTexture = loadTextureFromFile("assets/telemetry/steer_wheel.png");
     m_absOnTexture = loadTextureFromFile("assets/telemetry/abs_on.png");
     m_absOffTexture = loadTextureFromFile("assets/telemetry/abs_off.png");
+    
+    std::cout << "[Telemetry] Steering texture ID: " << m_steeringTexture << std::endl;
+    std::cout << "[Telemetry] ABS ON texture ID: " << m_absOnTexture << std::endl;
+    std::cout << "[Telemetry] ABS OFF texture ID: " << m_absOffTexture << std::endl;
 }
 
 void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& config, bool editMode) {
@@ -184,8 +193,8 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float rpmPct = (m_maxRPM > 0) ? (m_currentRPM / m_maxRPM) : 0.0f;
-    float blinkPct = (m_maxRPM > 0) ? (m_blinkRPM / m_maxRPM) : 0.8f;
+    float rpmPct = (m_maxRPM > 0.01f) ? (m_currentRPM / m_maxRPM) : 0.0f;
+    float blinkPct = (m_maxRPM > 0.01f) ? (m_blinkRPM / m_maxRPM) : 0.8f;
 
     bool blink = std::fmod(ImGui::GetTime() * 2.5f, 1.0f) < 0.5f;
     bool isRedline = (rpmPct >= blinkPct) && blink;
@@ -195,32 +204,39 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     float spacing = (width / 10.0f);
     float startX = p.x + spacing * 0.5f;
 
-    // Draw lights
+    // Draw lights - FIXED: Proper threshold calculation
     for (int i = 0; i < 10; i++) {
         float x = startX + i * spacing;
-        ImU32 lightCol = IM_COL32(100, 100, 100, 180);  // Default grey
-
-        // Draw filled circle if RPM exceeds this light's threshold
-        float threshold = (i + 1) / 10.0f;
-        if (rpmPct >= threshold) {
-            // Light is active - use color pattern
+        float cy = p.y + height * 0.5f;
+        
+        // Calculate threshold for THIS light (0.1, 0.2, 0.3... 1.0)
+        float threshold = (i + 1) * 0.1f;
+        
+        // Determine if this light should be ON
+        bool isActive = rpmPct >= threshold;
+        
+        if (isActive) {
+            // Light is active - determine color based on position
+            ImU32 lightCol;
             if (i < 2) {
-                lightCol = IM_COL32(0, 180, 0, 220);  // Green
+                lightCol = IM_COL32(0, 220, 0, 255);     // Green (first 2)
             } else if (i < 8) {
-                lightCol = IM_COL32(180, 180, 0, 220);  // Yellow
+                lightCol = IM_COL32(220, 220, 0, 255);   // Yellow (middle 6)
             } else {
-                lightCol = IM_COL32(100, 100, 100, 180);  // Grey for last 2
+                lightCol = IM_COL32(255, 100, 0, 255);   // Orange (last 2)
             }
-
-            // If in redline zone and blinking, show red
+            
+            // Override with red if in redline zone AND blinking
             if (isRedline) {
-                lightCol = IM_COL32(255, 0, 0, 220);
+                lightCol = IM_COL32(255, 0, 0, 255);
             }
-
-            dl->AddCircleFilled(ImVec2(x, p.y + height * 0.5f), dotRadius, lightCol, 8);
+            
+            // Draw filled circle
+            dl->AddCircleFilled(ImVec2(x, cy), dotRadius, lightCol, 12);
         } else {
-            // Unfilled circle (grey when off)
-            dl->AddCircle(ImVec2(x, p.y + height * 0.5f), dotRadius, lightCol, 8, 1.5f);
+            // Light is OFF - draw outline only
+            ImU32 outlineCol = IM_COL32(80, 80, 80, 150);
+            dl->AddCircle(ImVec2(x, cy), dotRadius, outlineCol, 12, 1.5f);
         }
     }
 
@@ -241,12 +257,13 @@ void TelemetryWidget::renderABS(float width, float height) {
         float imgSize = std::min(width, height) * 0.85f;
         float imgX = p.x + (width - imgSize) * 0.5f;
         float imgY = p.y + (height - imgSize) * 0.5f;
+        
         ImGui::SetCursorScreenPos(ImVec2(imgX, imgY));
         ImGui::Image((ImTextureID)(intptr_t)textureToUse, ImVec2(imgSize, imgSize));
         
-        // Reset cursor for proper layout
-        ImGui::SetCursorScreenPos(ImVec2(p.x + width, p.y));
-        ImGui::Dummy(ImVec2(0, height));
+        // FIXED: Reset cursor and advance properly
+        ImGui::SetCursorScreenPos(ImVec2(p.x, p.y));
+        ImGui::Dummy(ImVec2(width, height));
     } else {
         // Fallback: draw procedural circle with ABS text
         ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -305,24 +322,24 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
             dl->AddRectFilled(ImVec2(x, barBottom - filledH), ImVec2(x + barW, barBottom), colors[i]);
         }
 
-        // Numeric value on top of bar (above the bar area) - MOVED DOWN 3 more pixels, more compact
+        // FIXED: Numeric value on top of bar with better spacing to prevent overlap
         char buf[8];
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
         ImVec2 ts = ImGui::CalcTextSize(buf);
-        float textX = x + (barW - ts.x) * 0.5f;
         
-        // Position numbers higher, with extra offset for better spacing - MOVED DOWN 5 pixels total (3+2)
-        float textY = barTop - ts.y - 10.0f * m_scale + 5.0f * m_scale;
+        // Center text horizontally within each bar's column space
+        float columnW = width / 3.0f;
+        float textX = barStartX + i * columnW + (columnW - ts.x) * 0.5f;
+        
+        // Position numbers higher, with better vertical spacing - INCREASED spacing
+        float textY = barTop - ts.y - 12.0f * m_scale;
         
         // Ensure text doesn't go above the widget bounds
         if (textY < p.y - ts.y - 2.0f * m_scale) {
             textY = p.y - ts.y - 2.0f * m_scale;
         }
         
-        // Draw with tighter letter spacing (using smaller font rendering)
-        ImGui::PushFont(nullptr);
         dl->AddText(ImVec2(textX, textY), colors[i], buf);
-        ImGui::PopFont();
     }
 
     ImGui::Dummy(ImVec2(width, height));
@@ -391,7 +408,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     }
 
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
-    float gearFontSize = height * 0.30f;  // 30% of row height - INCREASED by 2px
+    float gearFontSize = height * 0.30f;  // 30% of row height
     float gearScale = gearFontSize / gearSize.y;
     float gearX = p.x + (width - gearSize.x * gearScale) * 0.5f;
     float gearY = p.y + height * 0.05f;
@@ -399,12 +416,11 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale,
                 ImVec2(gearX, gearY), IM_COL32(255, 255, 255, 255), gearBuf);
 
-    // Speed (middle): larger number, sized by 2px
+    // Speed (middle): larger number
     char speedBuf[8];
     snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
 
-    // Font size by 2px
-    float speedFontSize = height * 0.28f + 2.0f * m_scale;  // INCREASED by 2 pixels
+    float speedFontSize = height * 0.28f + 2.0f * m_scale;
     ImVec2 speedSize = ImGui::CalcTextSize(speedBuf);
     float speedScale = speedFontSize / speedSize.y;
     float speedX = p.x + (width - speedSize.x * speedScale) * 0.5f;
@@ -413,9 +429,9 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale,
                 ImVec2(speedX, speedY), IM_COL32(200, 200, 200, 255), speedBuf);
 
-    // "km/h" label: small, below speed - BOLD and increase size by 2px
+    // "km/h" label: small, below speed
     char unitBuf[] = "km/h";
-    float unitFontSize = height * 0.18f + 2.0f * m_scale;  // INCREASED by 2 pixels
+    float unitFontSize = height * 0.18f + 2.0f * m_scale;
     ImVec2 unitSize = ImGui::CalcTextSize(unitBuf);
     float unitScale = unitFontSize / unitSize.y;
     float unitX = p.x + (width - unitSize.x * unitScale) * 0.5f;
@@ -439,6 +455,7 @@ void TelemetryWidget::renderSteering(float width, float height) {
         float imgSize = std::min(width, height) * 0.85f;
         float imgX = p.x + (width - imgSize) * 0.5f;
         float imgY = p.y + (height - imgSize) * 0.5f;
+        
         ImGui::SetCursorScreenPos(ImVec2(imgX, imgY));
         ImGui::Image((ImTextureID)(intptr_t)m_steeringTexture, ImVec2(imgSize, imgSize));
 
@@ -452,9 +469,9 @@ void TelemetryWidget::renderSteering(float width, float height) {
         ImVec2 lineEnd(cx + r * std::sin(angle), cy - r * std::cos(angle));
         dl->AddLine(ImVec2(cx, cy), lineEnd, IM_COL32(255, 200, 0, 200), 2.0f * m_scale);
 
-        // Reset cursor for proper layout
-        ImGui::SetCursorScreenPos(ImVec2(p.x + width, p.y));
-        ImGui::Dummy(ImVec2(0, height));
+        // FIXED: Reset cursor and advance properly
+        ImGui::SetCursorScreenPos(ImVec2(p.x, p.y));
+        ImGui::Dummy(ImVec2(width, height));
     } else {
         // Fallback: draw steering wheel procedurally
         ImDrawList* dl = ImGui::GetWindowDrawList();
