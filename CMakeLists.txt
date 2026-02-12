@@ -34,7 +34,7 @@ if(WIN32)
 endif()
 
 # =============================================================================
-# FetchContent - GLFW & ImGui (no external/ folders)
+# FetchContent - GLFW, ImGui, and stb (headers only)
 # =============================================================================
 include(FetchContent)
 
@@ -77,6 +77,20 @@ target_link_libraries(imgui PUBLIC glfw)
 target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
 # =============================================================================
+# STB (header-only library)
+# =============================================================================
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(stb)
+
+# Create interface library for stb headers
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+
+# =============================================================================
 # GLAD - Pre-generated static lib
 # =============================================================================
 add_library(glad STATIC src/glad.c)
@@ -113,6 +127,7 @@ target_link_libraries(iRacingOverlay PRIVATE
     glfw
     imgui
     glad
+    stb
     opengl32
 )
 
