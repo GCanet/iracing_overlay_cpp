@@ -27,7 +27,8 @@
 
 namespace ui {
 
-// FIXED: Destructor defined here where all types are complete
+// FIXED: Constructor and Destructor defined here where all types are complete
+OverlayWindow::OverlayWindow() = default;
 OverlayWindow::~OverlayWindow() = default;
 
 bool OverlayWindow::initialize(const char* title, int width, int height) {
