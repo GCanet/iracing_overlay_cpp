@@ -12,6 +12,8 @@
 
 // Windows-specific includes for DWM and window manipulation
 #ifdef _WIN32
+    #define GLFW_EXPOSE_NATIVE_WIN32
+    #include <GLFW/glfw3native.h>
     #include <dwmapi.h>
     #pragma comment(lib, "dwmapi.lib")
 #endif
