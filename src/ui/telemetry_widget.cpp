@@ -25,12 +25,11 @@ TelemetryWidget::TelemetryWidget(OverlayWindow* overlay)
     m_throttleHistory.resize(256, 0.0f);
     m_brakeHistory.resize(256, 0.0f);
     m_clutchHistory.resize(256, 0.0f);
-    
+
     loadAssets();
 }
 
 TelemetryWidget::~TelemetryWidget() {
-    // Clean up OpenGL textures
     if (m_steeringTexture) glDeleteTextures(1, &m_steeringTexture);
     if (m_absOnTexture) glDeleteTextures(1, &m_absOnTexture);
     if (m_absOffTexture) glDeleteTextures(1, &m_absOffTexture);
@@ -38,11 +37,11 @@ TelemetryWidget::~TelemetryWidget() {
 
 unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
     unsigned int textureID = 0;
-    
+
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);
     unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
-    
+
     if (!data) {
         return 0;
     }
@@ -50,13 +49,11 @@ unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
 
-    // Set texture parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    // Load texture data
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
     glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -67,13 +64,8 @@ unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
 }
 
 void TelemetryWidget::loadAssets() {
-    // Load steering wheel texture
     m_steeringTexture = loadTextureFromFile("assets/telemetry/steering_wheel.png");
-    
-    // Load ABS on texture
     m_absOnTexture = loadTextureFromFile("assets/telemetry/abs_on.png");
-    
-    // Load ABS off texture
     m_absOffTexture = loadTextureFromFile("assets/telemetry/abs_off.png");
 }
 
@@ -89,23 +81,27 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
         m_brake = sdk->getFloat("Brake", 0.0f);
         m_clutch = sdk->getFloat("Clutch", 0.0f);
         m_gear = sdk->getInt("Gear", 0);
-        m_speed = static_cast<int>(sdk->getFloat("Speed", 0.0f));
+        // Speed: iRacing gives m/s, convert to km/h
+        m_speed = static_cast<int>(sdk->getFloat("Speed", 0.0f) * 3.6f);
         m_steeringAngle = sdk->getFloat("SteeringWheelAngle", 0.0f);
+        m_steeringAngleMax = sdk->getFloat("SteeringWheelAngleMax", 7.854f); // ~450 deg default
         m_absActive = sdk->getBool("BrakeABSactive", false);
 
-        // Update history
+        // Update history (ring buffer)
         m_throttleHistory[m_historyHead] = m_throttle * 100.0f;
         m_brakeHistory[m_historyHead] = m_brake * 100.0f;
         m_clutchHistory[m_historyHead] = m_clutch * 100.0f;
         m_historyHead = (m_historyHead + 1) % 256;
     }
 
-    const float rpmH = 16.0f * m_scale;
-    const float rowH = 32.0f * m_scale;
-    const float gapRpm = 2.0f * m_scale;
+    // --- Layout constants (iRdashies-inspired: wider, compact height) ---
+    const float rpmH = 14.0f * m_scale;       // shift lights row height
+    const float rowH = 52.0f * m_scale;        // main content row height (taller for readability)
+    const float gapRpm = 3.0f * m_scale;       // gap between RPM lights and content
+    const float padX = 6.0f * m_scale;
     const float padY = 4.0f * m_scale;
 
-    float totalW = 300.0f * m_scale;
+    float totalW = 380.0f * m_scale;           // wider to fit all elements cleanly
     float totalH = rpmH + gapRpm + rowH + padY * 2.0f;
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
@@ -117,9 +113,10 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
 
     ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, config.alpha));
+    // Pure black background like iRdashies
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, config.alpha));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, padY));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padX, padY));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
@@ -138,25 +135,27 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
 
     float contentW = ImGui::GetContentRegionAvail().x;
 
+    // Row 1: Shift lights (centered circles)
     renderShiftLights(contentW, rpmH);
     ImGui::Dummy(ImVec2(0, gapRpm));
 
-    float absW = 22.0f * m_scale;
-    float steerW = 22.0f * m_scale;
-    float barsW = 24.0f * m_scale;
-    float gearW = 36.0f * m_scale;
-    float gap = 2.0f * m_scale;
+    // Row 2: Main content - ABS | Trace | Pedal Numbers | Gear/Speed | Steering
+    float absW = 42.0f * m_scale;        // ABS icon (wider for circle + parentheses)
+    float steerW = 42.0f * m_scale;      // Steering wheel
+    float pedalNumW = 44.0f * m_scale;   // Pedal % numbers (3 digits each)
+    float gearW = 56.0f * m_scale;       // Gear + speed + km/h
+    float gap = 4.0f * m_scale;
 
-    float traceW = contentW - absW - steerW - barsW - gearW - gap * 5.0f;
+    float traceW = contentW - absW - steerW - pedalNumW - gearW - gap * 4.0f;
+    if (traceW < 80.0f * m_scale) traceW = 80.0f * m_scale; // minimum trace width
 
-    // Render all components in row
     renderABS(absW, rowH);
     ImGui::SameLine(0.0f, gap);
 
     renderHistoryTrace(traceW, rowH);
     ImGui::SameLine(0.0f, gap);
 
-    renderPedalBars(barsW, rowH);
+    renderPedalBars(pedalNumW, rowH);
     ImGui::SameLine(0.0f, gap);
 
     renderGearSpeed(gearW, rowH);
@@ -174,199 +173,346 @@ void TelemetryWidget::setScale(float scale) {
     m_scale = scale;
 }
 
+// =============================================================================
+// SHIFT LIGHTS - Circular dots like iRdashies
+// Pattern (10 lights): green green yellow yellow grey yellow yellow green green green
+// Active: fills from outside-in based on RPM, blinks red at redline
+// =============================================================================
 void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
     float rpmPct = (m_maxRPM > 0) ? std::min(m_currentRPM / m_maxRPM, 1.0f) : 0.0f;
-    int numLights = 7;
-    float gap = 1.5f * m_scale;
-    float lightW = (width - (numLights - 1) * gap) / numLights;
+
+    // 10 circular lights like iRdashies
+    const int numLights = 10;
+    float radius = height * 0.4f;
+    float diameter = radius * 2.0f;
+    float totalLightsW = numLights * diameter + (numLights - 1) * (2.0f * m_scale);
+    float startX = p.x + (width - totalLightsW) * 0.5f; // center horizontally
+    float centerY = p.y + height * 0.5f;
+    float spacing = diameter + 2.0f * m_scale;
+
+    // Color pattern for each light position (matching iRdashies):
+    // Positions: 0=green, 1=green, 2=yellow, 3=yellow, 4=grey, 5=yellow, 6=yellow, 7=green, 8=green, 9=green
+    ImU32 lightColors[10] = {
+        IM_COL32(0, 200, 0, 255),     // 0: green
+        IM_COL32(0, 200, 0, 255),     // 1: green
+        IM_COL32(220, 200, 0, 255),   // 2: yellow
+        IM_COL32(220, 200, 0, 255),   // 3: yellow
+        IM_COL32(100, 100, 100, 255), // 4: grey (neutral)
+        IM_COL32(220, 200, 0, 255),   // 5: yellow
+        IM_COL32(220, 200, 0, 255),   // 6: yellow
+        IM_COL32(0, 200, 0, 255),     // 7: green
+        IM_COL32(0, 200, 0, 255),     // 8: green
+        IM_COL32(0, 200, 0, 255),     // 9: green
+    };
+
     int activeLights = static_cast<int>(rpmPct * numLights + 0.5f);
+    bool blinking = (m_blinkRPM > 0 && m_currentRPM >= m_blinkRPM);
 
     for (int i = 0; i < numLights; i++) {
-        float x = p.x + i * (lightW + gap);
-        ImVec2 tl(x, p.y);
-        ImVec2 br(x + lightW, p.y + height);
+        float cx = startX + i * spacing + radius;
+        ImVec2 center(cx, centerY);
 
-        ImU32 col = IM_COL32(30, 30, 30, 200);
-
-        if (i < activeLights) {
-            if (m_blinkRPM > 0 && m_currentRPM >= m_blinkRPM) {
-                int blink = static_cast<int>(ImGui::GetTime() * 10) % 2;
-                col = blink ? IM_COL32(255, 0, 0, 255) : IM_COL32(80, 0, 0, 255);
-            } else if (i == numLights - 1) {
-                col = IM_COL32(255, 0, 0, 255);
-            } else {
-                float pct = static_cast<float>(i) / numLights;
-                col = (pct > 0.7f) ? IM_COL32(255, 165, 0, 255) : 
-                      (pct > 0.5f) ? IM_COL32(255, 255, 0, 255) : IM_COL32(0, 255, 0, 255);
-            }
+        if (blinking) {
+            // All lights blink red at redline
+            int blink = static_cast<int>(ImGui::GetTime() * 10) % 2;
+            ImU32 col = blink ? IM_COL32(255, 0, 0, 255) : IM_COL32(40, 0, 0, 180);
+            dl->AddCircleFilled(center, radius, col, 16);
+        } else if (i < activeLights) {
+            dl->AddCircleFilled(center, radius, lightColors[i], 16);
+        } else {
+            // Inactive: dark circle
+            dl->AddCircleFilled(center, radius, IM_COL32(25, 25, 25, 200), 16);
         }
-
-        dl->AddRectFilled(tl, br, col);
     }
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
+// =============================================================================
+// ABS INDICATOR - Standard ABS icon with circle + parentheses (like iRdashies)
+// Falls back to texture if available, otherwise draws the icon procedurally
+// =============================================================================
 void TelemetryWidget::renderABS(float width, float height) {
     ImVec2 p = ImGui::GetCursorScreenPos();
 
     if (m_absActive && m_absOnTexture) {
-        // Render ABS on texture
         ImGui::Image((ImTextureID)(intptr_t)m_absOnTexture, ImVec2(width, height));
-    } else if (!m_absActive && m_absOffTexture) {
-        // Render ABS off texture
+        return;
+    }
+    if (!m_absActive && m_absOffTexture) {
         ImGui::Image((ImTextureID)(intptr_t)m_absOffTexture, ImVec2(width, height));
+        return;
+    }
+
+    // Fallback: draw ABS icon like iRdashies - circle with "ABS" text + parentheses
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float cx = p.x + width * 0.5f;
+    float cy = p.y + height * 0.5f;
+    float r = std::min(width, height) * 0.32f;
+
+    if (m_absActive) {
+        // Active: bright amber/yellow
+        ImU32 activeCol = IM_COL32(255, 180, 0, 255);
+
+        // Outer parentheses (sensor arcs)
+        float arcR = r + 4.0f * m_scale;
+        float arcThick = 2.0f * m_scale;
+        // Left parenthesis
+        dl->PathArcTo(ImVec2(cx, cy), arcR, 2.4f, 3.9f, 12);
+        dl->PathStroke(activeCol, false, arcThick);
+        // Right parenthesis
+        dl->PathArcTo(ImVec2(cx, cy), arcR, -0.75f, 0.75f, 12);
+        dl->PathStroke(activeCol, false, arcThick);
+
+        // Inner circle
+        dl->AddCircle(ImVec2(cx, cy), r, activeCol, 20, 2.0f * m_scale);
+
+        // "ABS" text
+        const char* txt = "ABS";
+        float fontSize = r * 0.85f;
+        ImVec2 ts = ImGui::CalcTextSize(txt);
+        float textScale = fontSize / ts.y;
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * textScale,
+                    ImVec2(cx - ts.x * textScale * 0.5f, cy - ts.y * textScale * 0.5f),
+                    activeCol, txt);
     } else {
-        // Fallback: draw circles
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        ImVec2 c = ImGui::GetCursorScreenPos();
-        c.x += width * 0.5f;
-        c.y += height * 0.5f;
+        // Inactive: dim grey
+        ImU32 dimCol = IM_COL32(60, 60, 60, 180);
 
-        float r = std::min(width, height) * 0.4f;
-        ImU32 bgCol = m_absActive ? IM_COL32(255, 200, 0, 220) : IM_COL32(50, 50, 50, 200);
-        ImU32 ringCol = m_absActive ? IM_COL32(255, 255, 255, 255) : IM_COL32(100, 100, 100, 180);
+        float arcR = r + 4.0f * m_scale;
+        float arcThick = 1.5f * m_scale;
+        dl->PathArcTo(ImVec2(cx, cy), arcR, 2.4f, 3.9f, 12);
+        dl->PathStroke(dimCol, false, arcThick);
+        dl->PathArcTo(ImVec2(cx, cy), arcR, -0.75f, 0.75f, 12);
+        dl->PathStroke(dimCol, false, arcThick);
 
-        dl->AddCircleFilled(c, r, bgCol, 16);
-        dl->AddCircle(c, r, ringCol, 16, 1.0f * m_scale);
+        dl->AddCircle(ImVec2(cx, cy), r, dimCol, 20, 1.5f * m_scale);
 
         const char* txt = "ABS";
+        float fontSize = r * 0.85f;
         ImVec2 ts = ImGui::CalcTextSize(txt);
-        float textScale = (r * 0.8f) / ts.y;
+        float textScale = fontSize / ts.y;
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * textScale,
-                    ImVec2(c.x - ts.x * textScale * 0.5f, c.y - ts.y * textScale * 0.5f),
-                    IM_COL32(0, 0, 0, 255), txt);
-
-        ImGui::Dummy(ImVec2(width, height));
+                    ImVec2(cx - ts.x * textScale * 0.5f, cy - ts.y * textScale * 0.5f),
+                    dimCol, txt);
     }
+
+    ImGui::Dummy(ImVec2(width, height));
 }
 
+// =============================================================================
+// PEDAL BARS - Vertical bars like iRdashies (Throttle %, Brake %, Speed numeric)
+// Shows numeric values: throttle, brake, clutch percentages
+// =============================================================================
 void TelemetryWidget::renderPedalBars(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float barHeight = height * 0.8f;
+    float barHeight = height * 0.75f;
     float topGap = (height - barHeight) * 0.5f;
     float barW = (width - 4.0f * m_scale) / 3.0f;
-    float gap = 1.0f * m_scale;
+    float gap = 2.0f * m_scale;
 
-    float pedals[3] = {m_clutch, m_brake, m_throttle};
+    float pedals[3] = {m_throttle, m_brake, m_clutch};
     ImU32 colors[3] = {
-        IM_COL32(100, 149, 237, 255),
-        IM_COL32(255, 0, 0, 255),
-        IM_COL32(0, 255, 0, 255)
+        IM_COL32(0, 220, 0, 255),       // Throttle: green
+        IM_COL32(255, 40, 40, 255),      // Brake: red
+        IM_COL32(80, 140, 220, 255)      // Clutch: blue
     };
 
     for (int i = 0; i < 3; i++) {
         float x = p.x + i * (barW + gap);
         float filledH = barHeight * pedals[i];
-        float y = p.y + topGap + (barHeight - filledH);
+        float barTop = p.y + topGap;
+        float barBottom = barTop + barHeight;
 
-        // Background
-        dl->AddRectFilled(ImVec2(x, p.y + topGap), ImVec2(x + barW, p.y + topGap + barHeight),
-                         IM_COL32(20, 20, 20, 200));
+        // Background bar
+        dl->AddRectFilled(ImVec2(x, barTop), ImVec2(x + barW, barBottom),
+                         IM_COL32(15, 15, 15, 220));
 
-        // Filled bar
-        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + barW, p.y + topGap + barHeight), colors[i]);
+        // Filled portion (from bottom up)
+        if (filledH > 0.5f) {
+            dl->AddRectFilled(ImVec2(x, barBottom - filledH), ImVec2(x + barW, barBottom), colors[i]);
+        }
+
+        // Numeric value on top of bar
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
+        ImVec2 ts = ImGui::CalcTextSize(buf);
+        float textX = x + (barW - ts.x) * 0.5f;
+        float textY = barTop - ts.y - 1.0f * m_scale;
+        if (textY < p.y) textY = p.y;
+        dl->AddText(ImVec2(textX, textY), colors[i], buf);
     }
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
+// =============================================================================
+// HISTORY TRACE - Throttle/Brake/Clutch lines on dark background with grid
+// =============================================================================
 void TelemetryWidget::renderHistoryTrace(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    // Background
-    dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), IM_COL32(20, 20, 20, 200));
+    // Dark background
+    dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), IM_COL32(10, 10, 10, 220));
 
-    // Grid lines at 25%, 50%, 75%
-    ImU32 gridCol = IM_COL32(80, 80, 80, 100);
-    float gridYs[3] = {p.y + height * 0.25f, p.y + height * 0.5f, p.y + height * 0.75f};
-    
-    for (int g = 0; g < 3; g++) {
-        for (float x = p.x; x < p.x + width; x += 3.0f * m_scale) {
-            dl->AddLine(ImVec2(x, gridYs[g]), ImVec2(x + 1.5f * m_scale, gridYs[g]), gridCol, 0.5f);
+    // Subtle grid lines at 25%, 50%, 75%
+    ImU32 gridCol = IM_COL32(40, 40, 40, 100);
+    for (int g = 1; g <= 3; g++) {
+        float gy = p.y + height * (g * 0.25f);
+        // Dashed line
+        for (float x = p.x; x < p.x + width; x += 4.0f * m_scale) {
+            float endX = std::min(x + 2.0f * m_scale, p.x + width);
+            dl->AddLine(ImVec2(x, gy), ImVec2(endX, gy), gridCol, 0.5f);
         }
     }
 
-    // Draw traces
+    // Draw traces from history buffer (ring buffer, draw from oldest to newest)
     float pixelW = width / 256.0f;
     float traceThickness = 1.5f * m_scale;
 
     auto drawTrace = [&](const std::vector<float>& history, ImU32 color) {
-        for (int i = 0; i < 256; i++) {
-            int next = (i + 1) % 256;
+        // Draw from oldest sample to newest
+        for (int i = 0; i < 255; i++) {
+            int idx0 = (m_historyHead + i) % 256;
+            int idx1 = (m_historyHead + i + 1) % 256;
             float x1 = p.x + i * pixelW;
-            float x2 = p.x + next * pixelW;
-            float y1 = p.y + height * (1.0f - history[i] / 100.0f);
-            float y2 = p.y + height * (1.0f - history[next] / 100.0f);
+            float x2 = p.x + (i + 1) * pixelW;
+            float y1 = p.y + height * (1.0f - history[idx0] / 100.0f);
+            float y2 = p.y + height * (1.0f - history[idx1] / 100.0f);
             dl->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), color, traceThickness);
         }
     };
 
-    drawTrace(m_clutchHistory, IM_COL32(100, 149, 237, 200));
-    drawTrace(m_brakeHistory, IM_COL32(255, 0, 0, 200));
-    drawTrace(m_throttleHistory, IM_COL32(0, 255, 0, 200));
+    // Draw order: clutch (back), brake (mid), throttle (front) - matches iRdashies
+    drawTrace(m_clutchHistory, IM_COL32(80, 140, 220, 180));
+    drawTrace(m_brakeHistory, IM_COL32(255, 40, 40, 220));
+    drawTrace(m_throttleHistory, IM_COL32(0, 220, 0, 220));
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
+// =============================================================================
+// GEAR + SPEED - Large gear number, speed below with "km/h" label
+// Like iRdashies: big gear, speed + unit below
+// =============================================================================
 void TelemetryWidget::renderGearSpeed(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    char gearBuf[16];
+    char gearBuf[8];
     char speedBuf[16];
-    
+    char unitBuf[] = "km/h";
+
     // Format gear
     if (m_gear == 0) {
+        snprintf(gearBuf, sizeof(gearBuf), "N");
+    } else if (m_gear == -1) {
         snprintf(gearBuf, sizeof(gearBuf), "R");
-    } else if (m_gear < 0) {
-        snprintf(gearBuf, sizeof(gearBuf), "P");
     } else {
         snprintf(gearBuf, sizeof(gearBuf), "%d", m_gear);
     }
-    
-    // Format speed
+
     snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
 
+    // Gear: large, centered, top portion
+    float gearFontSize = height * 0.52f;
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
+    float gearScale = gearFontSize / gearSize.y;
+    float gearX = p.x + (width - gearSize.x * gearScale) * 0.5f;
+    float gearY = p.y + 2.0f * m_scale;
+
+    // Gear color: white, neutral = orange, reverse = red
+    ImU32 gearCol = IM_COL32(255, 255, 255, 255);
+    if (m_gear == 0) gearCol = IM_COL32(255, 165, 0, 255);  // N = orange
+    else if (m_gear == -1) gearCol = IM_COL32(255, 60, 60, 255); // R = red
+
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale,
+                ImVec2(gearX, gearY), gearCol, gearBuf);
+
+    // Speed: medium, below gear
+    float speedFontSize = height * 0.22f;
     ImVec2 speedSize = ImGui::CalcTextSize(speedBuf);
+    float speedScale = speedFontSize / speedSize.y;
+    float speedX = p.x + (width - speedSize.x * speedScale) * 0.5f;
+    float speedY = gearY + gearSize.y * gearScale + 1.0f * m_scale;
 
-    float gearX = p.x + width * 0.25f - gearSize.x * 0.5f;
-    float speedX = p.x + width * 0.75f - speedSize.x * 0.5f;
-    float textY = p.y + height * 0.5f - gearSize.y * 0.5f;
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale,
+                ImVec2(speedX, speedY), IM_COL32(200, 200, 200, 255), speedBuf);
 
-    dl->AddText(ImVec2(gearX, textY), IM_COL32(255, 200, 0, 255), gearBuf);
-    dl->AddText(ImVec2(speedX, textY), IM_COL32(0, 200, 255, 255), speedBuf);
+    // "km/h" label: small, below speed
+    float unitFontSize = height * 0.13f;
+    ImVec2 unitSize = ImGui::CalcTextSize(unitBuf);
+    float unitScale = unitFontSize / unitSize.y;
+    float unitX = p.x + (width - unitSize.x * unitScale) * 0.5f;
+    float unitY = speedY + speedSize.y * speedScale + 1.0f * m_scale;
+
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * unitScale,
+                ImVec2(unitX, unitY), IM_COL32(120, 120, 120, 200), unitBuf);
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
+// =============================================================================
+// STEERING WHEEL - Rotated wheel icon or procedural fallback
+// Shows actual steering angle with rotation
+// =============================================================================
 void TelemetryWidget::renderSteering(float width, float height) {
     ImVec2 p = ImGui::GetCursorScreenPos();
 
     if (m_steeringTexture) {
-        // Render steering wheel texture
-        ImGui::Image((ImTextureID)(intptr_t)m_steeringTexture, ImVec2(width, height));
-    } else {
-        // Fallback: draw steering wheel
+        // With texture: we can't easily rotate ImGui::Image, so use draw list with UV rotation
+        // For simplicity, draw the texture without rotation and overlay a rotation indicator
+        float imgSize = std::min(width, height) * 0.85f;
+        float imgX = p.x + (width - imgSize) * 0.5f;
+        float imgY = p.y + (height - imgSize) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(imgX, imgY));
+        ImGui::Image((ImTextureID)(intptr_t)m_steeringTexture, ImVec2(imgSize, imgSize));
+
+        // Add rotation line overlay
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        ImVec2 c = p;
-        c.x += width * 0.5f;
-        c.y += height * 0.5f;
+        float cx = imgX + imgSize * 0.5f;
+        float cy = imgY + imgSize * 0.5f;
+        float r = imgSize * 0.35f;
+        float maxAngle = (m_steeringAngleMax > 0.01f) ? m_steeringAngleMax : 7.854f;
+        float angle = (m_steeringAngle / maxAngle) * static_cast<float>(M_PI);
+        ImVec2 lineEnd(cx + r * std::sin(angle), cy - r * std::cos(angle));
+        dl->AddLine(ImVec2(cx, cy), lineEnd, IM_COL32(255, 200, 0, 200), 2.0f * m_scale);
 
+        // Reset cursor for proper layout
+        ImGui::SetCursorScreenPos(ImVec2(p.x + width, p.y));
+        ImGui::Dummy(ImVec2(0, height));
+    } else {
+        // Fallback: draw steering wheel procedurally
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float cx = p.x + width * 0.5f;
+        float cy = p.y + height * 0.5f;
         float r = std::min(width, height) * 0.35f;
-        float angle = (m_steeringAngle / m_steeringAngleMax) * static_cast<float>(M_PI);
+        float maxAngle = (m_steeringAngleMax > 0.01f) ? m_steeringAngleMax : 7.854f;
+        float angle = (m_steeringAngle / maxAngle) * static_cast<float>(M_PI);
 
-        dl->AddCircle(c, r, IM_COL32(100, 100, 100, 200), 16, 1.0f * m_scale);
+        // Wheel rim
+        dl->AddCircle(ImVec2(cx, cy), r, IM_COL32(180, 180, 180, 220), 24, 2.5f * m_scale);
 
-        ImVec2 lineEnd(c.x + r * std::sin(angle), c.y - r * std::cos(angle));
-        dl->AddLine(c, lineEnd, IM_COL32(255, 200, 0, 255), 2.0f * m_scale);
+        // Spokes (3 spokes, rotated by steering angle)
+        for (int i = 0; i < 3; i++) {
+            float spokeAngle = angle + (i * 2.0f * static_cast<float>(M_PI) / 3.0f) - static_cast<float>(M_PI) * 0.5f;
+            ImVec2 spokeEnd(cx + r * 0.7f * std::cos(spokeAngle), cy + r * 0.7f * std::sin(spokeAngle));
+            dl->AddLine(ImVec2(cx, cy), spokeEnd, IM_COL32(150, 150, 150, 200), 2.0f * m_scale);
+        }
+
+        // Center hub
+        dl->AddCircleFilled(ImVec2(cx, cy), r * 0.15f, IM_COL32(100, 100, 100, 200), 12);
+
+        // Top marker (reference point, rotates with wheel)
+        float markerAngle = angle - static_cast<float>(M_PI) * 0.5f;
+        ImVec2 markerPos(cx + r * std::cos(markerAngle), cy + r * std::sin(markerAngle));
+        dl->AddCircleFilled(markerPos, 3.0f * m_scale, IM_COL32(255, 200, 0, 255), 8);
 
         ImGui::Dummy(ImVec2(width, height));
     }
