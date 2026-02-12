@@ -18,7 +18,7 @@ class TelemetryWidget;
 class OverlayWindow {
 public:
     OverlayWindow() = default;
-    ~OverlayWindow() = default;
+    ~OverlayWindow();  // FIXED: declared here, defined in .cpp (incomplete type fix)
 
     bool initialize(const char* title = "iRacing Overlay", int width = 1920, int height = 1080);
     void run();

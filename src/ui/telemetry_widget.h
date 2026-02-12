@@ -15,7 +15,7 @@ namespace ui {
         TelemetryWidget(OverlayWindow* overlay = nullptr);
         ~TelemetryWidget();
 
-        void render(iracing::IRSDKManager* sdk, utils::WidgetConfig& config, bool editMode = false);
+        void render(bool editMode = false);  // FIXED: matches .cpp implementation
         void setScale(float scale);
 
     private:

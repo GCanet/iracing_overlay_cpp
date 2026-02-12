@@ -24,11 +24,10 @@ int main(int argc, char* argv[]) {
     std::cout << "  L   - Toggle Lock/Edit mode" << std::endl;
     std::cout << std::endl;
 
-    // Main loop
+    // Main loop (run() calls shutdown() internally when done)
     overlay.run();
 
-    // Cleanup
-    overlay.shutdown();
+    // FIXED: Removed duplicate overlay.shutdown() - run() already handles it
 
     std::cout << "Goodbye!" << std::endl;
 

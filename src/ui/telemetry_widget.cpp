@@ -7,7 +7,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
-#include <GL/gl.h>
+#include <glad/glad.h>   // FIXED: was <GL/gl.h> - need GLAD for GL_CLAMP_TO_EDGE, glGenerateMipmap etc.
 #include <stb_image.h>
 #include <cstdint>
 
@@ -115,7 +115,7 @@ void TelemetryWidget::loadAssets() {
     }
 }
 
-void TelemetryWidget::render(bool editMode) {  // FIXED: Correct signature - only takes editMode
+void TelemetryWidget::render(bool editMode) {
     ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
     if (!editMode) {
         flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;

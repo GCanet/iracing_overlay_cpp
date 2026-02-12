@@ -21,6 +21,9 @@
 
 namespace ui {
 
+// FIXED: Destructor defined here where all types are complete
+OverlayWindow::~OverlayWindow() = default;
+
 bool OverlayWindow::initialize(const char* title, int width, int height) {
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -150,7 +153,7 @@ void OverlayWindow::setupImGui() {
 }
 
 void OverlayWindow::run() {
-    m_lockKeyPressed = false;  // FIXED: Initialize member variable
+    m_lockKeyPressed = false;
 
     while (!glfwWindowShouldClose(m_window)) {
         glfwPollEvents();
@@ -180,7 +183,7 @@ void OverlayWindow::run() {
         // Render widgets
         bool editMode = !utils::Config::getInstance().uiLocked;
         if (m_relativeWidget) m_relativeWidget->render(m_relative.get(), editMode);
-        if (m_telemetryWidget) m_telemetryWidget->render(editMode);  // FIXED: Removed extra parameters
+        if (m_telemetryWidget) m_telemetryWidget->render(editMode);
 
         ImGui::Render();
 
@@ -203,6 +206,7 @@ void OverlayWindow::shutdown() {
 
     if (m_window) {
         glfwDestroyWindow(m_window);
+        m_window = nullptr;  // FIXED: prevent double destroy
     }
     glfwTerminate();
 

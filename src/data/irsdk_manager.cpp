@@ -138,6 +138,28 @@ bool IRSDKManager::waitForData(int timeoutMS) {
     return false;
 }
 
+// FIXED: Added missing update() implementation
+void IRSDKManager::update() {
+    // Try to connect if not already connected
+    if (!m_connected) {
+        startup();
+    }
+
+    // If connected, check if session is still active
+    if (m_connected && m_pHeader) {
+        if (!(m_pHeader->status & irsdk_stConnected)) {
+            // iRacing disconnected, reset
+            closeSharedMemory();
+            m_connected = false;
+            m_lastTickCount = -1;
+            m_latestBufIndex = -1;
+            return;
+        }
+        // Non-blocking poll for new data
+        waitForData(0);
+    }
+}
+
 void IRSDKManager::updateLatestBufferIndex() {
     int numBuf = std::min(m_pHeader->numBuf, (int)IRSDK_MAX_BUFS);
     m_latestBufIndex = 0;
