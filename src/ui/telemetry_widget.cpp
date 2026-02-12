@@ -96,7 +96,7 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
     // --- Layout constants (iRdashies-inspired: wider, compact height) ---
     const float rpmH = 14.0f * m_scale;       // shift lights row height
     const float rowH = 52.0f * m_scale;        // main content row height (taller for readability)
-    const float gapRpm = 3.0f * m_scale;       // gap between RPM lights and content
+    const float gapRpm = 7.0f * m_scale;       // gap between RPM lights and content - INCREASED from 3.0f
     const float padX = 6.0f * m_scale;
     const float padY = 4.0f * m_scale;
 
@@ -272,8 +272,8 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
     float barStartX = p.x + width * 0.1f;
     // INCREASED from 0.65 to 0.90 to fill more vertical space
     float barH = height * 0.90f;
-    // Adjusted top position to start from near top (0.05 instead of 0.15)
-    float barTop = p.y + height * 0.05f;
+    // Adjusted top position to start from near top (0.05 instead of 0.15) - MOVED DOWN 4 pixels
+    float barTop = p.y + height * 0.05f + 4.0f * m_scale;
 
     for (int i = 0; i < 3; i++) {
         float x = barStartX + i * width / 3.0f;
@@ -294,8 +294,15 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
         ImVec2 ts = ImGui::CalcTextSize(buf);
         float textX = x + (barW - ts.x) * 0.5f;
-        float textY = barTop - ts.y - 8.0f * m_scale;  // Increased from 1.0f to 8.0f
-        if (textY < p.y - ts.y) textY = p.y - ts.y;
+        
+        // Position numbers higher, with extra offset for better spacing
+        float textY = barTop - ts.y - 10.0f * m_scale;  // Increased from 8.0f to 10.0f
+        
+        // Ensure text doesn't go above the widget bounds
+        if (textY < p.y - ts.y - 2.0f * m_scale) {
+            textY = p.y - ts.y - 2.0f * m_scale;
+        }
+        
         dl->AddText(ImVec2(textX, textY), colors[i], buf);
     }
 
@@ -371,12 +378,12 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
 
     snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
 
-    // Gear: large, centered, top portion
+    // Gear: large, centered, top portion - MOVED UP 15 pixels
     float gearFontSize = height * 0.58f;
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
     float gearScale = gearFontSize / gearSize.y;
     float gearX = p.x + (width - gearSize.x * gearScale) * 0.5f;
-    float gearY = p.y + 2.0f * m_scale;
+    float gearY = p.y + 2.0f * m_scale - 15.0f * m_scale;  // MOVED UP 15 pixels
 
     // Gear color: white, neutral = orange, reverse = red
     ImU32 gearCol = IM_COL32(255, 255, 255, 255);
