@@ -270,10 +270,10 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
 
     float barW = width / 3.0f * 0.8f;
     float barStartX = p.x + width * 0.1f;
-    // INCREASED from 0.65 to 0.90 to fill more vertical space
-    float barH = height * 0.90f;
-    // Adjusted top position to start from near top (0.05 instead of 0.15) - MOVED DOWN 4 pixels
-    float barTop = p.y + height * 0.05f + 4.0f * m_scale;
+    // INCREASED from 0.65 to 0.90 to fill more vertical space, now 8px taller on top, 2px on bottom
+    float barH = height * 0.90f + 8.0f * m_scale + 2.0f * m_scale;  // Total +10 pixels taller
+    // Adjusted top position to start from near top (0.05 instead of 0.15) - MOVED DOWN 4 pixels, then UP 8 for bar height
+    float barTop = p.y + height * 0.05f + 4.0f * m_scale - 8.0f * m_scale;  // 8px up to extend top
 
     for (int i = 0; i < 3; i++) {
         float x = barStartX + i * width / 3.0f;
@@ -295,8 +295,8 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
         ImVec2 ts = ImGui::CalcTextSize(buf);
         float textX = x + (barW - ts.x) * 0.5f;
         
-        // Position numbers higher, with extra offset for better spacing - MOVED DOWN 3 pixels
-        float textY = barTop - ts.y - 10.0f * m_scale + 3.0f * m_scale;
+        // Position numbers higher, with extra offset for better spacing - MOVED DOWN 5 pixels total (3+2)
+        float textY = barTop - ts.y - 10.0f * m_scale + 5.0f * m_scale;
         
         // Ensure text doesn't go above the widget bounds
         if (textY < p.y - ts.y - 2.0f * m_scale) {
