@@ -32,10 +32,9 @@ namespace ui {
         float m_steeringAngleMax;
         bool m_absActive;
 
-        // History buffers (256 samples)
+        // History buffers (256 samples) - REMOVED clutch history
         std::vector<float> m_throttleHistory;
         std::vector<float> m_brakeHistory;
-        std::vector<float> m_clutchHistory;
         int m_historyHead;
 
         // Scaling

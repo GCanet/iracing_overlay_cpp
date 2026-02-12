@@ -24,7 +24,6 @@ TelemetryWidget::TelemetryWidget(OverlayWindow* overlay)
       m_steeringTexture(0), m_absOnTexture(0), m_absOffTexture(0) {
     m_throttleHistory.resize(256, 0.0f);
     m_brakeHistory.resize(256, 0.0f);
-    m_clutchHistory.resize(256, 0.0f);
 
     loadAssets();
 }
@@ -79,7 +78,8 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
         m_blinkRPM = sdk->getFloat("DriverCarSLBlinkRPM", 6500.0f);
         m_throttle = sdk->getFloat("Throttle", 0.0f);
         m_brake = sdk->getFloat("Brake", 0.0f);
-        m_clutch = 1.0f - sdk->getFloat("Clutch", 0.0f);
+        // Use real pedal clutch (0% = released, 100% = fully pressed) for launch control
+        m_clutch = sdk->getFloat("ClutchRaw", 0.0f);
         m_gear = sdk->getInt("Gear", 0);
         // Speed: iRacing gives m/s, convert to km/h
         m_speed = static_cast<int>(sdk->getFloat("Speed", 0.0f) * 3.6f);
@@ -87,10 +87,9 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
         m_steeringAngleMax = sdk->getFloat("SteeringWheelAngleMax", 7.854f); // ~450 deg default
         m_absActive = sdk->getBool("BrakeABSactive", false);
 
-        // Update history (ring buffer)
+        // Update history (ring buffer) - ONLY throttle and brake, NO clutch
         m_throttleHistory[m_historyHead] = m_throttle * 100.0f;
         m_brakeHistory[m_historyHead] = m_brake * 100.0f;
-        m_clutchHistory[m_historyHead] = m_clutch * 100.0f;
         m_historyHead = (m_historyHead + 1) % 256;
     }
 
@@ -178,14 +177,14 @@ void TelemetryWidget::setScale(float scale) {
 
 // =============================================================================
 // SHIFT LIGHTS - Circular dots like iRdashies
-// Pattern (10 lights): green green yellow yellow grey yellow yellow green green green
-// Active: fills from outside-in based on RPM, blinks red at redline
+// Pattern: grey by default, lights up with color when RPM increases
+// Blinks red at redline
 // =============================================================================
 void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float rpmPct = (m_maxRPM > 0) ? (m_currentRPM / m_maxRPM) : 0.0f;
+    float rpmPct = (m_maxRPM > 0 && m_currentRPM > 0) ? (m_currentRPM / m_maxRPM) : 0.0f;
     float blinkPct = (m_maxRPM > 0) ? (m_blinkRPM / m_maxRPM) : 0.8f;
 
     bool blink = std::fmod(ImGui::GetTime() * 2.5f, 1.0f) < 0.5f;
@@ -196,34 +195,31 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     float spacing = (width / 10.0f);
     float startX = p.x + spacing * 0.5f;
 
-    // Colors: green at start, yellow in middle, grey at end
-    ImU32 colors[10];
-    for (int i = 0; i < 10; i++) {
-        if (i < 2) {
-            colors[i] = IM_COL32(0, 180, 0, 180);  // Green
-        } else if (i < 8) {
-            colors[i] = IM_COL32(180, 180, 0, 180);  // Yellow
-        } else {
-            colors[i] = IM_COL32(100, 100, 100, 180);  // Grey
-        }
-    }
-
     // Draw lights
     for (int i = 0; i < 10; i++) {
         float x = startX + i * spacing;
-        ImU32 lightCol = colors[i];
-
-        // If in redline zone and blinking, show red
-        if (isRedline) {
-            lightCol = IM_COL32(255, 0, 0, 220);
-        }
+        ImU32 lightCol = IM_COL32(100, 100, 100, 180);  // Default grey
 
         // Draw filled circle if RPM exceeds this light's threshold
         float threshold = (i + 1) / 10.0f;
-        if (rpmPct >= threshold) {
+        if (rpmPct > 0 && rpmPct >= threshold) {
+            // Light is active - use color pattern
+            if (i < 2) {
+                lightCol = IM_COL32(0, 180, 0, 220);  // Green
+            } else if (i < 8) {
+                lightCol = IM_COL32(180, 180, 0, 220);  // Yellow
+            } else {
+                lightCol = IM_COL32(100, 100, 100, 180);  // Grey for last 2
+            }
+
+            // If in redline zone and blinking, show red
+            if (isRedline) {
+                lightCol = IM_COL32(255, 0, 0, 220);
+            }
+
             dl->AddCircleFilled(ImVec2(x, p.y + height * 0.5f), dotRadius, lightCol, 8);
         } else {
-            // Unfilled circle
+            // Unfilled circle (grey when off)
             dl->AddCircle(ImVec2(x, p.y + height * 0.5f), dotRadius, lightCol, 8, 1.5f);
         }
     }
@@ -259,6 +255,7 @@ void TelemetryWidget::renderABS(float width, float height) {
 
 // =============================================================================
 // PEDAL BARS - Throttle, Brake, Clutch as vertical bars with numeric values above
+// Bars now fill the vertical space (0.05 to 0.95)
 // =============================================================================
 void TelemetryWidget::renderPedalBars(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -273,8 +270,10 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
 
     float barW = width / 3.0f * 0.8f;
     float barStartX = p.x + width * 0.1f;
-    float barH = height * 0.65f;
-    float barTop = p.y + height * 0.15f;
+    // INCREASED from 0.65 to 0.90 to fill more vertical space
+    float barH = height * 0.90f;
+    // Adjusted top position to start from near top (0.05 instead of 0.15)
+    float barTop = p.y + height * 0.05f;
 
     for (int i = 0; i < 3; i++) {
         float x = barStartX + i * width / 3.0f;
@@ -290,7 +289,7 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
             dl->AddRectFilled(ImVec2(x, barBottom - filledH), ImVec2(x + barW, barBottom), colors[i]);
         }
 
-        // Numeric value on top of bar
+        // Numeric value on top of bar (above the bar area)
         char buf[8];
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
         ImVec2 ts = ImGui::CalcTextSize(buf);
@@ -304,7 +303,8 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
 }
 
 // =============================================================================
-// HISTORY TRACE - Throttle/Brake/Clutch lines on dark background with grid
+// HISTORY TRACE - Throttle/Brake lines on dark background with grid
+// NO CLUTCH history anymore
 // =============================================================================
 void TelemetryWidget::renderHistoryTrace(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -341,8 +341,7 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
         }
     };
 
-    // Draw order: clutch (back), brake (mid), throttle (front) - matches iRdashies
-    drawTrace(m_clutchHistory, IM_COL32(80, 140, 220, 180));
+    // Draw order: brake (back), throttle (front) - NO CLUTCH
     drawTrace(m_brakeHistory, IM_COL32(255, 40, 40, 220));
     drawTrace(m_throttleHistory, IM_COL32(0, 220, 0, 220));
 
@@ -372,7 +371,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
 
     snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
 
-    // Gear: large, centered, top portion (INCREASED FROM 0.52 TO 0.58)
+    // Gear: large, centered, top portion
     float gearFontSize = height * 0.58f;
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
     float gearScale = gearFontSize / gearSize.y;
@@ -387,7 +386,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale,
                 ImVec2(gearX, gearY), gearCol, gearBuf);
 
-    // Speed: medium, below gear (INCREASED FROM 0.22 TO 0.28)
+    // Speed: medium, below gear
     float speedFontSize = height * 0.28f;
     ImVec2 speedSize = ImGui::CalcTextSize(speedBuf);
     float speedScale = speedFontSize / speedSize.y;
@@ -397,7 +396,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale,
                 ImVec2(speedX, speedY), IM_COL32(200, 200, 200, 255), speedBuf);
 
-    // "km/h" label: small, below speed (INCREASED FROM 0.13 TO 0.18)
+    // "km/h" label: small, below speed
     float unitFontSize = height * 0.18f;
     ImVec2 unitSize = ImGui::CalcTextSize(unitBuf);
     float unitScale = unitFontSize / unitSize.y;
