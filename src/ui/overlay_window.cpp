@@ -10,6 +10,12 @@
 #include <glad/glad.h>
 #include <iostream>
 
+// Windows-specific includes for DWM and window manipulation
+#ifdef _WIN32
+    #include <dwmapi.h>
+    #pragma comment(lib, "dwmapi.lib")
+#endif
+
 namespace ui {
 
 OverlayWindow::OverlayWindow()
@@ -92,12 +98,12 @@ void OverlayWindow::setupImGui() {
     style.WindowRounding = 8.0f;
     style.FrameRounding = 4.0f;
 
-    // Load Roboto Mono Variable Font with 600 weight (SemiBold)
+    // Load Roboto Mono Variable Font with weight 600 (SemiBold)
     ImFont* robotoFont = nullptr;
     ImFontConfig fontConfig;
     fontConfig.SizePixels = 13.0f;
 
-    // Load RobotoMono-VariableFont_wght.ttf with weight axis set to 600
+    // Load RobotoMono-VariableFont_wght.ttf
     // This is the variable font that supports all weights dynamically
     robotoFont = io.Fonts->AddFontFromFileTTF(
         "assets/fonts/RobotoMono-VariableFont_wght.ttf",
@@ -124,7 +130,7 @@ void OverlayWindow::setupImGui() {
         );
     }
 
-    // If no Roboto Mono is available, use default font (still apply to text)
+    // If no Roboto Mono is available, use default font
     if (!robotoFont) {
         robotoFont = io.Fonts->GetDefaultFont();
         std::cout << "[ImGui] Roboto Mono not found, using default font. "
