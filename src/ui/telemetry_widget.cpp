@@ -202,7 +202,7 @@ void TelemetryWidget::renderABS(float width, float height) {
     // Determine which texture to display
     unsigned int textureToUse = m_absActive ? m_absOnTexture : m_absOffTexture;
 
-    // If we have a texture, render it (HORIZONTAL FLIP)
+    // If we have a texture, render it (HORIZONTAL FLIP ONLY)
     if (textureToUse != 0) {
         float targetSize = std::min(width, height);
         float xOffset = (width - targetSize) * 0.5f;
@@ -211,9 +211,9 @@ void TelemetryWidget::renderABS(float width, float height) {
         ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
         ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
 
-        // HORIZONTAL FLIP: swap left-right (u0.x=1, u1.x=0)
-        ImVec2 uv0(1.0f, 0.0f);  // Top-right
-        ImVec2 uv1(0.0f, 1.0f);  // Bottom-left
+        // HORIZONTAL FLIP ONLY: normal orientation but mirrored left-right
+        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
+        ImVec2 uv1(0.0f, 0.0f);  // Top-left
 
         dl->AddImage((ImTextureID)(intptr_t)textureToUse, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
@@ -256,26 +256,13 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
     float barBottom = p.y + height;
     float barH = barBottom - barTop;
 
-    // FIXED: Throttle and Brake 5px wider each, Clutch moved 2px left
+    // Bar width is the same for all - NO EXTRA OFFSET FOR CLUTCH
     for (int i = 0; i < 3; i++) {
         float columnW = width / 3.0f;
+        float barW = columnW * 0.6f;
         
-        // Adjust bar width: Throttle (index 2) and Brake (index 1) get +5px, Clutch (index 0) stays normal
-        float barW;
-        if (i == 1 || i == 2) {
-            // Brake and Throttle: 5px wider
-            barW = columnW * 0.6f + 5.0f * m_scale;
-        } else {
-            // Clutch: stays the same
-            barW = columnW * 0.6f;
-        }
-        
+        // Evenly space all bars - 1-2 pixel gap between them
         float x = p.x + i * columnW + (columnW - barW) * 0.5f;
-        
-        // FIXED: Move clutch 2px left
-        if (i == 0) {
-            x -= 2.0f * m_scale;
-        }
 
         // Background bar
         dl->AddRectFilled(ImVec2(x, barTop), ImVec2(x + barW, barBottom),
@@ -362,14 +349,11 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
 }
 
 // =============================================================================
-// GEAR/SPEED - Gear number and speed in km/h (MOVED 15px LEFT)
+// GEAR/SPEED - Gear number and speed in km/h
 // =============================================================================
 void TelemetryWidget::renderGearSpeed(float width, float height) {
     ImVec2 p = ImGui::GetCursorScreenPos();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-
-    // MOVED 15px LEFT: adjust position
-    float offsetX = -15.0f * m_scale;
 
     // Get gear label
     const char* gearLabel = "N";
@@ -381,10 +365,10 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
         gearLabel = gearStr;
     }
 
-    // FIXED: Gear box - NO black background (transparent), text 1px RIGHT (moved from 3px left), moved 10px up
+    // FIXED: Gear box - NO black background (transparent), text 1px RIGHT, moved 10px up
     float boxW = width * 0.5f;
     float boxH = height * 0.35f;
-    ImVec2 gearTopLeft = ImVec2(p.x + (width - boxW) * 0.5f + offsetX, p.y + height * 0.1f - 10.0f * m_scale);
+    ImVec2 gearTopLeft = ImVec2(p.x + (width - boxW) * 0.5f, p.y + height * 0.1f - 10.0f * m_scale);
     
     // NO background fill - just render the text directly
 
@@ -395,22 +379,22 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(nullptr, ImGui::GetFontSize() * 1.4f * m_scale, gearPos,
                 IM_COL32(255, 255, 255, 255), gearLabel);
 
-    // Speed and km/h below (centered with gear box, moved 10px up, moved 15px left)
+    // Speed and km/h below (centered with gear box, moved 10px up, moved 1px RIGHT)
     char speedStr[16];
     snprintf(speedStr, sizeof(speedStr), "%d", m_speed);
     ImVec2 speedSize = ImGui::CalcTextSize(speedStr);
-    ImVec2 speedPos = ImVec2(p.x + (width - speedSize.x) * 0.5f + offsetX, p.y + height * 0.55f - 10.0f * m_scale);
+    ImVec2 speedPos = ImVec2(p.x + (width - speedSize.x) * 0.5f + 1.0f * m_scale, p.y + height * 0.55f - 10.0f * m_scale);
     dl->AddText(speedPos, IM_COL32(200, 200, 200, 255), speedStr);
 
     ImVec2 kmhSize = ImGui::CalcTextSize("km/h");
-    ImVec2 kmhPos = ImVec2(p.x + (width - kmhSize.x) * 0.5f + offsetX, p.y + height * 0.75f - 10.0f * m_scale);
+    ImVec2 kmhPos = ImVec2(p.x + (width - kmhSize.x) * 0.5f + 1.0f * m_scale, p.y + height * 0.75f - 10.0f * m_scale);
     dl->AddText(kmhPos, IM_COL32(150, 150, 150, 200), "km/h");
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
 // =============================================================================
-// STEERING - Steering wheel with angle indicator (HORIZONTAL FLIP)
+// STEERING - Steering wheel with angle indicator (HORIZONTAL FLIP ONLY)
 // =============================================================================
 void TelemetryWidget::renderSteering(float width, float height) {
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -418,7 +402,7 @@ void TelemetryWidget::renderSteering(float width, float height) {
 
     // If we have a texture, render it
     if (m_steeringTexture != 0) {
-        // FIXED: HORIZONTAL FLIP and maintain aspect ratio
+        // FIXED: HORIZONTAL FLIP ONLY and maintain aspect ratio
         float targetSize = std::min(width, height);
         float xOffset = (width - targetSize) * 0.5f;
         float yOffset = (height - targetSize) * 0.5f;
@@ -426,9 +410,9 @@ void TelemetryWidget::renderSteering(float width, float height) {
         ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
         ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
 
-        // HORIZONTAL FLIP: swap left-right (u0.x=1, u1.x=0)
-        ImVec2 uv0(1.0f, 0.0f);  // Top-right
-        ImVec2 uv1(0.0f, 1.0f);  // Bottom-left
+        // HORIZONTAL FLIP ONLY: normal orientation but mirrored left-right
+        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
+        ImVec2 uv1(0.0f, 0.0f);  // Top-left
 
         dl->AddImage((ImTextureID)(intptr_t)m_steeringTexture, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
