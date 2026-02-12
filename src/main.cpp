@@ -1,7 +1,6 @@
 #define GLFW_INCLUDE_NONE
 #include "ui/overlay_window.h"
 #include <iostream>
-#include <memory>
 
 int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
@@ -9,11 +8,13 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
     std::cout << std::endl;
 
-    // FIXED: Use unique_ptr to avoid instantiating std::default_delete<TelemetryWidget>
-    // in this translation unit where TelemetryWidget is an incomplete type.
-    auto overlay = std::make_unique<ui::OverlayWindow>();
+    // FIXED: Use stack allocation instead of std::make_unique to avoid
+    // instantiating std::default_delete<OverlayWindow> in this translation unit,
+    // which would transitively require complete types for all unique_ptr members
+    // (TelemetryWidget, RelativeWidget, etc.) that are only forward-declared in the header.
+    ui::OverlayWindow overlay;
 
-    if (!overlay->initialize()) {
+    if (!overlay.initialize()) {
         std::cerr << "Failed to initialize overlay" << std::endl;
         return 1;
     }
@@ -27,9 +28,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::endl;
 
     // Main loop (run() calls shutdown() internally when done)
-    overlay->run();
-
-    // FIXED: Removed duplicate overlay.shutdown() - run() already handles it
+    overlay.run();
 
     std::cout << "Goodbye!" << std::endl;
 
