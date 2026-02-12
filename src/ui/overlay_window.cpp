@@ -134,7 +134,6 @@ void OverlayWindow::setupImGui() {
 
     // If no Roboto Mono is available, use default font
     if (!robotoFont) {
-        robotoFont = io.Fonts->GetDefaultFont();
         std::cout << "[ImGui] Roboto Mono not found, using default font. "
                   << "Place RobotoMono-VariableFont_wght.ttf in assets/fonts/" << std::endl;
     } else {
