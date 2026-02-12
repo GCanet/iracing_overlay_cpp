@@ -289,21 +289,24 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
             dl->AddRectFilled(ImVec2(x, barBottom - filledH), ImVec2(x + barW, barBottom), colors[i]);
         }
 
-        // Numeric value on top of bar (above the bar area) - MUCH HIGHER
+        // Numeric value on top of bar (above the bar area) - MOVED DOWN 3 more pixels, more compact
         char buf[8];
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(pedals[i] * 100.0f));
         ImVec2 ts = ImGui::CalcTextSize(buf);
         float textX = x + (barW - ts.x) * 0.5f;
         
-        // Position numbers higher, with extra offset for better spacing
-        float textY = barTop - ts.y - 10.0f * m_scale;  // Increased from 8.0f to 10.0f
+        // Position numbers higher, with extra offset for better spacing - MOVED DOWN 3 pixels
+        float textY = barTop - ts.y - 10.0f * m_scale + 3.0f * m_scale;
         
         // Ensure text doesn't go above the widget bounds
         if (textY < p.y - ts.y - 2.0f * m_scale) {
             textY = p.y - ts.y - 2.0f * m_scale;
         }
         
+        // Draw with tighter letter spacing (using smaller font rendering)
+        ImGui::PushFont(nullptr);
         dl->AddText(ImVec2(textX, textY), colors[i], buf);
+        ImGui::PopFont();
     }
 
     ImGui::Dummy(ImVec2(width, height));
@@ -378,23 +381,24 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
 
     snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
 
-    // Gear: large, centered, top portion - MOVED UP 15 pixels
-    float gearFontSize = height * 0.58f;
+    // Gear: large, centered, top portion - MOVED UP 15 pixels, increase size by 2px
+    float gearFontSize = height * 0.58f + 2.0f * m_scale;  // INCREASED by 2 pixels
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
     float gearScale = gearFontSize / gearSize.y;
     float gearX = p.x + (width - gearSize.x * gearScale) * 0.5f;
-    float gearY = p.y + 2.0f * m_scale - 15.0f * m_scale;  // MOVED UP 15 pixels
+    float gearY = p.y + 2.0f * m_scale - 15.0f * m_scale + 4.0f * m_scale;  // MOVED DOWN 4 pixels
 
     // Gear color: white, neutral = orange, reverse = red
     ImU32 gearCol = IM_COL32(255, 255, 255, 255);
     if (m_gear == 0) gearCol = IM_COL32(255, 165, 0, 255);  // N = orange
     else if (m_gear == -1) gearCol = IM_COL32(255, 60, 60, 255); // R = red
 
+    // Draw gear text UNBOLD (regular weight)
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale,
                 ImVec2(gearX, gearY), gearCol, gearBuf);
 
-    // Speed: medium, below gear
-    float speedFontSize = height * 0.28f;
+    // Speed: medium, below gear - increase size by 2px
+    float speedFontSize = height * 0.28f + 2.0f * m_scale;  // INCREASED by 2 pixels
     ImVec2 speedSize = ImGui::CalcTextSize(speedBuf);
     float speedScale = speedFontSize / speedSize.y;
     float speedX = p.x + (width - speedSize.x * speedScale) * 0.5f;
@@ -403,8 +407,8 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale,
                 ImVec2(speedX, speedY), IM_COL32(200, 200, 200, 255), speedBuf);
 
-    // "km/h" label: small, below speed
-    float unitFontSize = height * 0.18f;
+    // "km/h" label: small, below speed - BOLD and increase size by 2px
+    float unitFontSize = height * 0.18f + 2.0f * m_scale;  // INCREASED by 2 pixels
     ImVec2 unitSize = ImGui::CalcTextSize(unitBuf);
     float unitScale = unitFontSize / unitSize.y;
     float unitX = p.x + (width - unitSize.x * unitScale) * 0.5f;
