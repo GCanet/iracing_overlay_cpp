@@ -79,7 +79,7 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
         m_blinkRPM = sdk->getFloat("DriverCarSLBlinkRPM", 6500.0f);
         m_throttle = sdk->getFloat("Throttle", 0.0f);
         m_brake = sdk->getFloat("Brake", 0.0f);
-        m_clutch = sdk->getFloat("Clutch", 0.0f);
+        m_clutch = 1.0f - sdk->getFloat("Clutch", 0.0f);
         m_gear = sdk->getInt("Gear", 0);
         // Speed: iRacing gives m/s, convert to km/h
         m_speed = static_cast<int>(sdk->getFloat("Speed", 0.0f) * 3.6f);
@@ -102,7 +102,7 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
     const float padY = 4.0f * m_scale;
 
     float totalW = 330.0f * m_scale;           // reduced width (50 pixels smaller)
-    float totalH = rpmH + gapRpm + rowH + padY * 3.0f;  // increased bottom padding to prevent cutoff
+    float totalH = rpmH + gapRpm + rowH + padY * 3.0f + 8.0f;
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
 
@@ -162,6 +162,9 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
     ImGui::SameLine(0.0f, gap);
 
     renderSteering(steerW, rowH);
+
+    ImGui::Spacing();
+    ImGui::Spacing();
 
     ImGui::End();
 
@@ -239,7 +242,8 @@ void TelemetryWidget::renderABS(float width, float height) {
     float cy = p.y + height * 0.5f;
     float radius = std::min(width, height) * 0.35f;
 
-    ImU32 absCol = m_absActive ? IM_COL32(255, 100, 0, 220) : IM_COL32(80, 80, 80, 180);
+    ImU32 absCol = m_absActive ?
+        IM_COL32(255, 100, 0, 220) : IM_COL32(80, 80, 80, 180);
 
     // Draw circle
     dl->AddCircle(ImVec2(cx, cy), radius, absCol, 12, 2.0f * m_scale);
@@ -322,7 +326,7 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
 
     // Draw traces from history buffer (ring buffer, draw from oldest to newest)
     float pixelW = width / 256.0f;
-    float traceThickness = 1.5f * m_scale;
+    float traceThickness = 3.5f * m_scale;
 
     auto drawTrace = [&](const std::vector<float>& history, ImU32 color) {
         // Draw from oldest sample to newest
@@ -428,7 +432,7 @@ void TelemetryWidget::renderSteering(float width, float height) {
         float cy = imgY + imgSize * 0.5f;
         float r = imgSize * 0.35f;
         float maxAngle = (m_steeringAngleMax > 0.01f) ? m_steeringAngleMax : 7.854f;
-        float angle = (m_steeringAngle / maxAngle) * static_cast<float>(M_PI);
+        float angle = -(m_steeringAngle / maxAngle) * static_cast<float>(M_PI);
         ImVec2 lineEnd(cx + r * std::sin(angle), cy - r * std::cos(angle));
         dl->AddLine(ImVec2(cx, cy), lineEnd, IM_COL32(255, 200, 0, 200), 2.0f * m_scale);
 
@@ -442,7 +446,7 @@ void TelemetryWidget::renderSteering(float width, float height) {
         float cy = p.y + height * 0.5f;
         float r = std::min(width, height) * 0.35f;
         float maxAngle = (m_steeringAngleMax > 0.01f) ? m_steeringAngleMax : 7.854f;
-        float angle = (m_steeringAngle / maxAngle) * static_cast<float>(M_PI);
+        float angle = -(m_steeringAngle / maxAngle) * static_cast<float>(M_PI);
 
         // Wheel rim
         dl->AddCircle(ImVec2(cx, cy), r, IM_COL32(180, 180, 180, 220), 24, 2.5f * m_scale);
