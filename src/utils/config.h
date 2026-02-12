@@ -5,40 +5,33 @@
 
 namespace utils {
 
-struct WidgetConfig {
-    float posX = -1.0f;  // -1 = first time (auto-center)
-    float posY = -1.0f;
-    float width = -1.0f;
-    float height = -1.0f;
-    float alpha = 0.7f;
-    bool visible = true;
-};
-
 class Config {
 public:
+    // Singleton access
+    static Config& getInstance() {
+        static Config instance;
+        return instance;
+    }
+
+    // Delete copy/move constructors
+    Config(const Config&) = delete;
+    Config& operator=(const Config&) = delete;
+
+    // Configuration data
+    float posX = 100.0f;
+    float posY = 100.0f;
+    float width = 600.0f;
+    float height = 400.0f;
+    float alpha = 0.9f;
+    bool visible = true;
+    bool uiLocked = true;  // Start locked
+
+    // Load/Save
     static void load(const std::string& filename = "config.ini");
     static void save(const std::string& filename = "config.ini");
 
-    // Widget configs
-    static WidgetConfig& getRelativeConfig();
-    static WidgetConfig& getTelemetryConfig();
-
-    // Global overlay settings
-    static float getFontScale();
-    static void setFontScale(float scale);
-
-    static bool isClickThrough();
-    static void setClickThrough(bool clickThrough);
-
-    static float getGlobalAlpha();
-    static void setGlobalAlpha(float alpha);
-
 private:
-    static WidgetConfig s_relativeConfig;
-    static WidgetConfig s_telemetryConfig;
-    static float s_fontScale;
-    static bool s_clickThrough;
-    static float s_globalAlpha;
+    Config() = default;  // Private constructor for singleton
 };
 
 } // namespace utils

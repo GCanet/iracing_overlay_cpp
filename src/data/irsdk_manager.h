@@ -19,6 +19,7 @@ public:
     
     // Data access
     bool waitForData(int timeoutMS = 16);
+    void update();  // ADDED: Update method to poll for data
     
     // Get values
     float getFloat(const char* name, float defaultValue = 0.0f) const;

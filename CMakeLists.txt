@@ -29,8 +29,6 @@ option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 if(WIN32)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     add_definitions(-DNOMINMAX)
-    # NOTE: We do NOT set CMAKE_WIN32_EXECUTABLE ON here.
-    # We want a console window for debug output.
 endif()
 
 # =============================================================================
@@ -50,8 +48,7 @@ set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
 
-# ImGui - use a stable release that actually exists
-# v1.91.6 is the latest stable release as of early 2025
+# ImGui
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -64,7 +61,6 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
@@ -76,9 +72,7 @@ target_include_directories(imgui PUBLIC
 target_link_libraries(imgui PUBLIC glfw)
 target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
-# =============================================================================
-# STB (header-only library)
-# =============================================================================
+# STB
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
@@ -86,13 +80,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
-# Create interface library for stb headers
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 
-# =============================================================================
-# GLAD - Pre-generated static lib
-# =============================================================================
+# GLAD
 add_library(glad STATIC src/glad.c)
 target_include_directories(glad PUBLIC include)
 
@@ -109,45 +100,34 @@ set(APP_SOURCES
     src/data/irating_calc.cpp
     src/utils/config.cpp
     src/utils/yaml_parser.cpp
-    src/stb_impl.cpp  # FIXED: Dedicated STB implementation file
+    src/stb_impl.cpp
 )
 
 add_executable(iRacingOverlay ${APP_SOURCES})
 
-# WIN32_EXECUTABLE FALSE = console subsystem (we get a console window)
-set_target_properties(iRacingOverlay PROPERTIES
-    WIN32_EXECUTABLE FALSE
-)
-
 target_include_directories(iRacingOverlay PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/include
 )
 
 target_link_libraries(iRacingOverlay PRIVATE
-    glfw
     imgui
+    glfw
     glad
     stb
     opengl32
+    dwmapi
 )
 
-# Link dwmapi for DwmExtendFrameIntoClientArea
-if(WIN32)
-    target_link_libraries(iRacingOverlay PRIVATE dwmapi)
-endif()
+# Copy assets and config to build directory
+add_custom_command(TARGET iRacingOverlay POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/assets
+    $<TARGET_FILE_DIR:iRacingOverlay>/assets
+)
 
-# Copy assets
-if(EXISTS ${CMAKE_SOURCE_DIR}/assets)
-    add_custom_command(TARGET iRacingOverlay POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/assets
-        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets
-    )
-endif()
-
-# Install
-install(TARGETS iRacingOverlay RUNTIME DESTINATION bin)
-if(EXISTS ${CMAKE_SOURCE_DIR}/assets)
-    install(DIRECTORY assets DESTINATION bin)
-endif()
+add_custom_command(TARGET iRacingOverlay POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${CMAKE_SOURCE_DIR}/config.ini
+    $<TARGET_FILE_DIR:iRacingOverlay>/config.ini
+)

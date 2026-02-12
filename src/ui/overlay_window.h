@@ -17,26 +17,18 @@ class TelemetryWidget;
 
 class OverlayWindow {
 public:
-    OverlayWindow();
-    ~OverlayWindow();
+    OverlayWindow() = default;
+    ~OverlayWindow() = default;
 
-    bool initialize(const char* title, int width, int height);
+    bool initialize(const char* title = "iRacing Overlay", int width = 1920, int height = 1080);
     void run();
     void shutdown();
 
-    // Acceso público para widgets
-    bool& getEditModeRef() { return m_editMode; }
-    float& getGlobalAlphaRef() { return m_globalAlpha; }
-    void applyWindowAttributes();
-
 private:
     void setupImGui();
-    void setupStyle();
-    void renderFrame();
-    void handleInput();
 
-    GLFWwindow* m_window;
-    bool m_lockKeyPressed = false;  // FIXED: Added missing member variable
+    GLFWwindow* m_window = nullptr;
+    bool m_lockKeyPressed = false;
 
     // iRacing data
     std::unique_ptr<iracing::IRSDKManager> m_sdk;
@@ -45,15 +37,6 @@ private:
     // UI Widgets
     std::unique_ptr<RelativeWidget> m_relativeWidget;
     std::unique_ptr<TelemetryWidget> m_telemetryWidget;
-
-    // State
-    bool m_running;
-    bool m_editMode;       // true = edición (drag + menú), false = locked
-    float m_globalAlpha;   // transparencia global
-
-    // Window settings
-    int m_windowWidth;
-    int m_windowHeight;
 };
 
 } // namespace ui
