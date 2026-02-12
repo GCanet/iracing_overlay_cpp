@@ -7,17 +7,23 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <iostream>
 
+// FIXED: Include windows.h BEFORE glad/GLFW to prevent APIENTRY redefinition (C4005)
 #ifdef _WIN32
     #include <windows.h>
     #include <dwmapi.h>
     #pragma comment(lib, "dwmapi.lib")
     #define GLFW_EXPOSE_NATIVE_WIN32
+#endif
+
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
+#ifdef _WIN32
     #include <GLFW/glfw3native.h>
 #endif
+
+#include <iostream>
 
 namespace ui {
 

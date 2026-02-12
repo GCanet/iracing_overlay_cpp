@@ -4,11 +4,17 @@
 #include "data/irsdk_manager.h"
 #include "utils/config.h"
 #include <imgui.h>
-#include <glad/glad.h>
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+
+// FIXED: Include windows.h BEFORE glad to prevent APIENTRY redefinition (C4005)
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
+#include <glad/glad.h>
 
 // stb_image.h included for declaration only — STB_IMAGE_IMPLEMENTATION lives in stb_impl.cpp
 #include "stb_image.h"

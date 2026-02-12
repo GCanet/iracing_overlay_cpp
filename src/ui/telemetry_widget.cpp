@@ -7,9 +7,15 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
-#include <glad/glad.h>   // FIXED: was <GL/gl.h> - need GLAD for GL_CLAMP_TO_EDGE, glGenerateMipmap etc.
-#include <stb_image.h>
 #include <cstdint>
+
+// FIXED: Include windows.h BEFORE glad to prevent APIENTRY redefinition (C4005)
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
+#include <glad/glad.h>
+#include <stb_image.h>
 
 namespace ui {
 
