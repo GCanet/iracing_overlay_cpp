@@ -1,4 +1,9 @@
 #include "ui/overlay_window.h"
+#include "utils/config.h"
+#include "data/irsdk_manager.h"
+#include "data/relative_calc.h"
+#include "ui/relative_widget.h"
+#include "ui/telemetry_widget.h"
 #include <iostream>
 #include <glad/glad.h>
 #include <backends/imgui_impl_glfw.h>
@@ -17,7 +22,9 @@ OverlayWindow::OverlayWindow()
     : m_window(nullptr)
     , m_windowWidth(1920)
     , m_windowHeight(1080)
+    , m_running(true)
     , m_editMode(false)
+    , m_globalAlpha(0.9f)
 {
 }
 
@@ -185,9 +192,10 @@ void OverlayWindow::run() {
         // Handle input
         handleInput();
 
-        // Update SDK
+        // Update SDK - try to connect/reconnect, then poll for new data
         if (m_sdk) {
-            m_sdk->update();
+            m_sdk->startup();          // Attempts connection (no-op if already connected)
+            m_sdk->waitForData(0);     // Non-blocking poll for new telemetry data
             if (m_sdk->isSessionActive()) {
                 m_relative->update();
             }

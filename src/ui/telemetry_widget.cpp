@@ -18,6 +18,8 @@ TelemetryWidget::TelemetryWidget(OverlayWindow* overlay)
     : m_currentRPM(0.0f)
     , m_maxRPM(7000.0f)
     , m_blinkRPM(6500.0f)
+    , m_shiftFirstRPM(0.0f)
+    , m_shiftLastRPM(0.0f)
     , m_throttle(0.0f)
     , m_brake(0.0f)
     , m_clutch(0.0f)
@@ -79,11 +81,11 @@ unsigned int TelemetryWidget::loadTextureFromFile(const char* filepath) {
 void TelemetryWidget::loadAssets() {
     std::cout << "[Telemetry] Loading assets..." << std::endl;
 
-    // Try multiple path variations
+    // Try multiple path variations — FIXED: steering_wheel.png (not steer_wheel.png)
     const char* steerPaths[] = {
-        "assets/telemetry/steer_wheel.png",
-        "..\\assets\\telemetry\\steer_wheel.png",
-        "../../assets/telemetry/steer_wheel.png"
+        "assets/telemetry/steering_wheel.png",
+        "..\\assets\\telemetry\\steering_wheel.png",
+        "../../assets/telemetry/steering_wheel.png"
     };
     const char* absOnPaths[] = {
         "assets/telemetry/abs_on.png",
@@ -135,6 +137,8 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
         m_currentRPM = sdk->getFloat("RPM", 0.0f);
         m_maxRPM = sdk->getFloat("ShiftGrindRPM", 7000.0f);
         m_blinkRPM = sdk->getFloat("DriverCarSLBlinkRPM", 6500.0f);
+        m_shiftFirstRPM = sdk->getFloat("DriverCarSLFirstRPM", 0.0f);
+        m_shiftLastRPM = sdk->getFloat("DriverCarSLLastRPM", 0.0f);
         m_throttle = sdk->getFloat("Throttle", 0.0f);
         m_brake = sdk->getFloat("Brake", 0.0f);
         // Use real pedal clutch inverted (0% = pressed, 100% = released) for launch control
@@ -238,13 +242,41 @@ void TelemetryWidget::setScale(float scale) {
 // SHIFT LIGHTS - Circular dots like iRdashies
 // Pattern: grey by default, lights up with color when RPM increases
 // Blinks red at redline
+// FIXED: Uses DriverCarSLFirstRPM / DriverCarSLLastRPM for proper shift light range
 // =============================================================================
 void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float rpmPct = (m_maxRPM > 0.01f) ? (m_currentRPM / m_maxRPM) : 0.0f;
-    float blinkPct = (m_maxRPM > 0.01f) ? (m_blinkRPM / m_maxRPM) : 0.8f;
+    // FIXED: Calculate RPM percentage within the shift light range
+    // Use DriverCarSLFirstRPM and DriverCarSLLastRPM if available,
+    // otherwise fall back to full RPM range
+    float rpmPct = 0.0f;
+    float slFirst = m_shiftFirstRPM;
+    float slLast = m_shiftLastRPM;
+
+    if (slFirst > 0.0f && slLast > slFirst) {
+        // Proper shift light range from SDK
+        float range = slLast - slFirst;
+        rpmPct = (m_currentRPM - slFirst) / range;
+    } else if (m_maxRPM > 0.01f) {
+        // Fallback: use full RPM range
+        rpmPct = m_currentRPM / m_maxRPM;
+    }
+    // Clamp to [0, 1]
+    if (rpmPct < 0.0f) rpmPct = 0.0f;
+    if (rpmPct > 1.0f) rpmPct = 1.0f;
+
+    // Blink threshold: use blinkRPM mapped into the same shift light range
+    float blinkPct = 0.8f;
+    if (slFirst > 0.0f && slLast > slFirst) {
+        float range = slLast - slFirst;
+        blinkPct = (m_blinkRPM - slFirst) / range;
+        if (blinkPct < 0.0f) blinkPct = 0.0f;
+        if (blinkPct > 1.0f) blinkPct = 1.0f;
+    } else if (m_maxRPM > 0.01f) {
+        blinkPct = m_blinkRPM / m_maxRPM;
+    }
 
     bool blink = std::fmod(ImGui::GetTime() * 2.5f, 1.0f) < 0.5f;
     bool isRedline = (rpmPct >= blinkPct) && blink;
@@ -254,7 +286,7 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     float spacing = (width / 10.0f);
     float startX = p.x + spacing * 0.5f;
 
-    // Draw lights - FIXED: Proper threshold calculation
+    // Draw lights
     for (int i = 0; i < 10; i++) {
         float x = startX + i * spacing;
         float cy = p.y + height * 0.5f;

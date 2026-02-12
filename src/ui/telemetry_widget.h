@@ -23,6 +23,8 @@ namespace ui {
         float m_currentRPM;
         float m_maxRPM;
         float m_blinkRPM;
+        float m_shiftFirstRPM;   // DriverCarSLFirstRPM - first shift light RPM
+        float m_shiftLastRPM;    // DriverCarSLLastRPM  - last shift light RPM
         float m_throttle;
         float m_brake;
         float m_clutch;
@@ -42,7 +44,7 @@ namespace ui {
         OverlayWindow* m_overlay;
 
         // Asset textures (OpenGL texture IDs)
-        // Place PNG files at: assets/telemetry/steer_wheel.png (128x128)
+        // Place PNG files at: assets/telemetry/steering_wheel.png (128x128)
         //                     assets/telemetry/abs_on.png (128x128)
         //                     assets/telemetry/abs_off.png (128x128)
         unsigned int m_steeringTexture;

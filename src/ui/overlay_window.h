@@ -33,9 +33,7 @@ private:
     void setupImGui();
     void setupStyle();
     void renderFrame();
-    void processInput();
-    void toggleEditMode();
-    void saveConfigOnExit();
+    void handleInput();
 
     GLFWwindow* m_window;
 
