@@ -4,106 +4,72 @@
 #include "data/irsdk_manager.h"
 #include "data/relative_calc.h"
 #include "utils/config.h"
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-#include "glad/glad.h"
-
-#ifdef _WIN32
-    #define GLFW_EXPOSE_NATIVE_WIN32
-    #include <GLFW/glfw3native.h>
-    #include <dwmapi.h>
-    #pragma comment(lib, "dwmapi.lib")
-#endif
-
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <iostream>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 namespace ui {
 
 OverlayWindow::OverlayWindow()
-    : m_window(nullptr)
-    , m_running(false)
-    , m_editMode(false)
-    , m_globalAlpha(0.7f)
-    , m_windowWidth(1920)
-    , m_windowHeight(1080)
-{
-}
+    : m_window(nullptr), m_running(false), m_editMode(false),
+      m_globalAlpha(0.9f), m_windowWidth(1920), m_windowHeight(1080) {}
 
 OverlayWindow::~OverlayWindow() {
+    shutdown();
 }
 
 bool OverlayWindow::initialize() {
-#ifdef _WIN32
-    // Allocate console for debug output
-    if (AllocConsole()) {
-        FILE* fDummy;
-        freopen_s(&fDummy, "CONOUT$", "w", stdout);
-        freopen_s(&fDummy, "CONOUT$", "w", stderr);
-        freopen_s(&fDummy, "CONIN$", "r", stdin);
-        std::cout.clear();
-        std::clog.clear();
-        std::cerr.clear();
-        std::cin.clear();
-    }
-#endif
-
     // Initialize GLFW
     if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
+        std::cerr << "[OverlayWindow] Failed to initialize GLFW" << std::endl;
         return false;
     }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
-    glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
 
     m_window = glfwCreateWindow(m_windowWidth, m_windowHeight, "iRacing Overlay", nullptr, nullptr);
     if (!m_window) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
+        std::cerr << "[OverlayWindow] Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return false;
     }
 
     glfwMakeContextCurrent(m_window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(0);  // No vsync
 
+    // Load OpenGL functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
+        std::cerr << "[OverlayWindow] Failed to load OpenGL" << std::endl;
+        glfwDestroyWindow(m_window);
+        glfwTerminate();
         return false;
     }
 
+    // Setup ImGui
     setupImGui();
     setupStyle();
 
-    // Load config
-    auto& cfg = utils::Config::getRelativeConfig();
-    m_editMode = !utils::Config::isClickThrough();
-    m_globalAlpha = utils::Config::getGlobalAlpha();
-
-    // Create widgets
+    // Initialize iRacing SDK
     m_sdk = std::make_unique<iracing::IRSDKManager>();
     m_relative = std::make_unique<iracing::RelativeCalculator>(m_sdk.get());
+
+    // Initialize widgets
     m_relativeWidget = std::make_unique<RelativeWidget>(this);
     m_telemetryWidget = std::make_unique<TelemetryWidget>(this);
 
-    applyWindowAttributes();
+    // Load config
+    utils::Config::load("config.ini");
 
     m_running = true;
+    std::cout << "[OverlayWindow] Initialized successfully" << std::endl;
 
-    std::cout << "============================================" << std::endl;
-    std::cout << "  iRacing Overlay - Initialized" << std::endl;
-    std::cout << "============================================" << std::endl;
-    std::cout << "Controls:" << std::endl;
-    std::cout << "  Q      - Quit" << std::endl;
-    std::cout << "  L      - Toggle Lock (Edit/Locked mode)" << std::endl;
-    std::cout << "  Drag   - Move widgets (when unlocked)" << std::endl;
-    std::cout << std::endl;
-    std::cout << "Status: " << (m_editMode ? "EDIT MODE" : "LOCKED") << std::endl;
-
+    applyWindowAttributes();
     return true;
 }
 
@@ -111,8 +77,8 @@ void OverlayWindow::setupImGui() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavNoCaptureKeyboard;
-    io.IniFilename = nullptr; // Don't save imgui.ini
+
+    ImGui::StyleColorsDark();
 
     ImGui_ImplGlfw_InitForOpenGL(m_window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -120,52 +86,50 @@ void OverlayWindow::setupImGui() {
 
 void OverlayWindow::setupStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 5.0f;
-    style.FrameRounding = 3.0f;
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 0.0f;
-    
-    ImGui::StyleColorsDark();
+    style.WindowPadding = ImVec2(4, 4);
+    style.FramePadding = ImVec2(3, 3);
+    style.ItemSpacing = ImVec2(8, 4);
+    style.WindowRounding = 0.0f;
+    style.FrameRounding = 2.0f;
+    style.Alpha = 0.95f;
 }
 
-void OverlayWindow::applyWindowAttributes() {
-#ifdef _WIN32
-    HWND hwnd = glfwGetWin32Window(m_window);
-    if (!hwnd) {
-        std::cerr << "Failed to get Win32 window handle" << std::endl;
-        return;
+void OverlayWindow::processInput() {
+    if (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) {
+        m_running = false;
+        saveConfigOnExit();
     }
 
-    MARGINS margins = { -1, -1, -1, -1 };
-    DwmExtendFrameIntoClientArea(hwnd, &margins);
-
-    LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-    exStyle |= WS_EX_LAYERED | WS_EX_TOPMOST;
-
-    if (m_editMode) {
-        exStyle &= ~WS_EX_TRANSPARENT;
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-        SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
-    } else {
-        exStyle |= WS_EX_TRANSPARENT;
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-        BYTE alphaByte = static_cast<BYTE>(m_globalAlpha * 255);
-        SetLayeredWindowAttributes(hwnd, 0, alphaByte, LWA_ALPHA);
+    if (glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS) {
+        static double lastPressTime = -1.0;
+        double currentTime = glfwGetTime();
+        if (currentTime - lastPressTime > 0.3) {
+            toggleEditMode();
+            lastPressTime = currentTime;
+        }
     }
-
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-
-    std::cout << "[Window] Attributes applied - EditMode: " << m_editMode << std::endl;
-#endif
 }
 
 void OverlayWindow::toggleEditMode() {
     m_editMode = !m_editMode;
     applyWindowAttributes();
-    
-    std::cout << (m_editMode ?
+    std::cout << "[OverlayWindow] " << (m_editMode ?
         "EDIT MODE - You can drag widgets" : "LOCKED - Click-through enabled") << std::endl;
+}
+
+void OverlayWindow::applyWindowAttributes() {
+    if (!m_window) return;
+
+    // Set click-through when locked (non-edit mode)
+    if (m_editMode) {
+        glfwSetWindowAttrib(m_window, GLFW_MOUSE_PASSTHROUGH, GLFW_FALSE);
+    } else {
+        glfwSetWindowAttrib(m_window, GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
+    }
+}
+
+void OverlayWindow::saveConfigOnExit() {
+    utils::Config::save("config.ini");
 }
 
 void OverlayWindow::run() {
@@ -177,7 +141,7 @@ void OverlayWindow::run() {
             if (!m_sdk->isConnected()) {
                 m_sdk->startup();
             }
-            
+
             if (m_sdk->waitForData(16)) {
                 if (m_sdk->isSessionActive()) {
                     m_relative->update();
@@ -194,18 +158,16 @@ void OverlayWindow::renderFrame() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // ──────────────────────────────────────────────────
-    // ONLY render these two widgets - NO debug windows
-    // ──────────────────────────────────────────────────
+    // Render widgets
     m_relativeWidget->render(m_relative.get(), m_editMode);
-    m_telemetryWidget->render(m_sdk.get(), m_editMode);
+    
+    // Pass SDK and config to telemetry widget
+    auto& telemetryConfig = utils::Config::getTelemetryConfig();
+    m_telemetryWidget->render(m_sdk.get(), telemetryConfig, m_editMode);
 
-    // ──────────────────────────────────────────────────
     // Status indicator in top-right corner
-    // FIX: Declare 'io' before using it (was missing → C2065 + C2440)
-    // ──────────────────────────────────────────────────
     {
-        ImGuiIO& io = ImGui::GetIO();   // ← THIS WAS MISSING
+        ImGuiIO& io = ImGui::GetIO();
 
         ImGui::SetNextWindowPos(
             ImVec2(io.DisplaySize.x - 10.0f, 10.0f),
@@ -235,58 +197,31 @@ void OverlayWindow::renderFrame() {
     }
 
     ImGui::Render();
-    
+
     int display_w, display_h;
     glfwGetFramebufferSize(m_window, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    
+
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    
+
     glfwSwapBuffers(m_window);
-}
-
-void OverlayWindow::processInput() {
-    if (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) {
-        m_running = false;
-    }
-
-    static bool lKeyWasPressed = false;
-    bool lKeyPressed = glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS;
-    if (lKeyPressed && !lKeyWasPressed) {
-        toggleEditMode();
-    }
-    lKeyWasPressed = lKeyPressed;
 }
 
 void OverlayWindow::shutdown() {
     saveConfigOnExit();
 
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
     if (m_window) {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+
         glfwDestroyWindow(m_window);
-        m_window = nullptr;
     }
+
     glfwTerminate();
-
-    if (m_sdk) {
-        m_sdk->shutdown();
-    }
-
-#ifdef _WIN32
-    FreeConsole();
-#endif
+    std::cout << "[OverlayWindow] Shutdown complete" << std::endl;
 }
 
-void OverlayWindow::saveConfigOnExit() {
-    utils::Config::setClickThrough(!m_editMode);
-    utils::Config::setGlobalAlpha(m_globalAlpha);
-    utils::Config::save("config.ini");
-    std::cout << "Config saved." << std::endl;
-}
-
-} // namespace ui
+}  // namespace ui
