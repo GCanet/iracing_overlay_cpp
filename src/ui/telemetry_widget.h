@@ -32,7 +32,7 @@ namespace ui {
         float m_steeringAngleMax;
         bool m_absActive;
 
-        // History buffers
+        // History buffers (256 samples)
         std::vector<float> m_throttleHistory;
         std::vector<float> m_brakeHistory;
         std::vector<float> m_clutchHistory;
@@ -41,6 +41,18 @@ namespace ui {
         // Scaling
         float m_scale;
         OverlayWindow* m_overlay;
+
+        // Asset textures (OpenGL texture IDs)
+        // Place PNG files at: assets/telemetry/steering_wheel.png (128x128)
+        //                     assets/telemetry/abs_on.png (128x128)
+        //                     assets/telemetry/abs_off.png (128x128)
+        unsigned int m_steeringTexture;
+        unsigned int m_absOnTexture;
+        unsigned int m_absOffTexture;
+
+        // Asset loading
+        void loadAssets();
+        unsigned int loadTextureFromFile(const char* filepath);
 
         // Render functions
         void renderShiftLights(float width, float height);

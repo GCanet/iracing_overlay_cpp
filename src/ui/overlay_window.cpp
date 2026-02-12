@@ -7,7 +7,6 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
-#include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -22,9 +21,7 @@ OverlayWindow::~OverlayWindow() {
 }
 
 bool OverlayWindow::initialize() {
-    // Initialize GLFW
     if (!glfwInit()) {
-        std::cerr << "[OverlayWindow] Failed to initialize GLFW" << std::endl;
         return false;
     }
 
@@ -32,43 +29,43 @@ bool OverlayWindow::initialize() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);  // Borderless window
+    glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);    // Always on top
+
+    // Get primary monitor dimensions for fullscreen borderless
+    const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    m_windowWidth = mode->width;
+    m_windowHeight = mode->height;
 
     m_window = glfwCreateWindow(m_windowWidth, m_windowHeight, "iRacing Overlay", nullptr, nullptr);
     if (!m_window) {
-        std::cerr << "[OverlayWindow] Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return false;
     }
 
-    glfwMakeContextCurrent(m_window);
-    glfwSwapInterval(0);  // No vsync
+    // Position at (0,0) for true fullscreen borderless
+    glfwSetWindowPos(m_window, 0, 0);
 
-    // Load OpenGL functions
+    glfwMakeContextCurrent(m_window);
+    glfwSwapInterval(0);  // No vsync - run as fast as possible
+
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "[OverlayWindow] Failed to load OpenGL" << std::endl;
         glfwDestroyWindow(m_window);
         glfwTerminate();
         return false;
     }
 
-    // Setup ImGui
     setupImGui();
     setupStyle();
 
-    // Initialize iRacing SDK
     m_sdk = std::make_unique<iracing::IRSDKManager>();
     m_relative = std::make_unique<iracing::RelativeCalculator>(m_sdk.get());
-
-    // Initialize widgets
     m_relativeWidget = std::make_unique<RelativeWidget>(this);
     m_telemetryWidget = std::make_unique<TelemetryWidget>(this);
 
-    // Load config
     utils::Config::load("config.ini");
 
     m_running = true;
-    std::cout << "[OverlayWindow] Initialized successfully" << std::endl;
-
     applyWindowAttributes();
     return true;
 }
@@ -77,6 +74,7 @@ void OverlayWindow::setupImGui() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     ImGui::StyleColorsDark();
 
@@ -92,6 +90,8 @@ void OverlayWindow::setupStyle() {
     style.WindowRounding = 0.0f;
     style.FrameRounding = 2.0f;
     style.Alpha = 0.95f;
+    style.AntiAliasedLines = true;
+    style.AntiAliasedLinesUseTex = true;
 }
 
 void OverlayWindow::processInput() {
@@ -100,12 +100,12 @@ void OverlayWindow::processInput() {
         saveConfigOnExit();
     }
 
+    static double lastLToggle = 0.0;
     if (glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS) {
-        static double lastPressTime = -1.0;
         double currentTime = glfwGetTime();
-        if (currentTime - lastPressTime > 0.3) {
+        if (currentTime - lastLToggle > 0.3) {
             toggleEditMode();
-            lastPressTime = currentTime;
+            lastLToggle = currentTime;
         }
     }
 }
@@ -113,14 +113,11 @@ void OverlayWindow::processInput() {
 void OverlayWindow::toggleEditMode() {
     m_editMode = !m_editMode;
     applyWindowAttributes();
-    std::cout << "[OverlayWindow] " << (m_editMode ?
-        "EDIT MODE - You can drag widgets" : "LOCKED - Click-through enabled") << std::endl;
 }
 
 void OverlayWindow::applyWindowAttributes() {
     if (!m_window) return;
 
-    // Set click-through when locked (non-edit mode)
     if (m_editMode) {
         glfwSetWindowAttrib(m_window, GLFW_MOUSE_PASSTHROUGH, GLFW_FALSE);
     } else {
@@ -158,17 +155,15 @@ void OverlayWindow::renderFrame() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // Render widgets
+    // Render widgets only
     m_relativeWidget->render(m_relative.get(), m_editMode);
     
-    // Pass SDK and config to telemetry widget
     auto& telemetryConfig = utils::Config::getTelemetryConfig();
     m_telemetryWidget->render(m_sdk.get(), telemetryConfig, m_editMode);
 
-    // Status indicator in top-right corner
-    {
+    // Status indicator (only in edit mode to minimize draw calls)
+    if (m_editMode) {
         ImGuiIO& io = ImGui::GetIO();
-
         ImGui::SetNextWindowPos(
             ImVec2(io.DisplaySize.x - 10.0f, 10.0f),
             ImGuiCond_Always,
@@ -182,17 +177,10 @@ void OverlayWindow::renderFrame() {
                                 ImGuiWindowFlags_AlwaysAutoResize |
                                 ImGuiWindowFlags_NoFocusOnAppearing |
                                 ImGuiWindowFlags_NoNav;
-        if (!m_editMode) {
-            flags |= ImGuiWindowFlags_NoInputs;
-        }
 
         ImGui::Begin("##Status", nullptr, flags);
-        if (m_editMode) {
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "EDIT MODE");
-            ImGui::Text("Press L to lock");
-        } else {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "LOCKED");
-        }
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "EDIT MODE");
+        ImGui::Text("Press L to lock");
         ImGui::End();
     }
 
@@ -221,7 +209,6 @@ void OverlayWindow::shutdown() {
     }
 
     glfwTerminate();
-    std::cout << "[OverlayWindow] Shutdown complete" << std::endl;
 }
 
 }  // namespace ui
