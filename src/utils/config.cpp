@@ -1,4 +1,4 @@
-#include "config.h"
+#include "utils/config.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -24,7 +24,7 @@ WidgetConfig Config::s_telemetryConfig = {
     720.0f,   // posY - UPDATED DEFAULT
     300.0f,   // width
     100.0f,   // height
-    0.9f,     // alpha
+    0.9f,     // alpha - UPDATED TO 0.9 DEFAULT
     true      // visible
 };
 
