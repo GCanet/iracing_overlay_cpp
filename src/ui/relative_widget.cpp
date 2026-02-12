@@ -7,6 +7,13 @@
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+#include <filesystem>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+namespace fs = std::filesystem;
 
 namespace ui {
 
@@ -15,22 +22,26 @@ RelativeWidget::RelativeWidget(OverlayWindow* overlay)
 {
 }
 
+RelativeWidget::~RelativeWidget() {
+    // Clean up any loaded textures if needed
+}
+
 void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode) {
     if (!relative) return;
 
     auto& config = utils::Config::getRelativeConfig();
-
-    // Get drivers FIRST so we can size the window to content
     auto drivers = relative->getRelative(4, 4);
     int numDrivers = static_cast<int>(drivers.size());
 
-    // ── Calculate tight window size based on actual content ──
-    float rowH    = ImGui::GetTextLineHeightWithSpacing();
-    float headerH = rowH + 2.0f;  // header text + separator
-    float tableH  = rowH * std::max(numDrivers, 1);
-    float padY    = 4.0f;  // top + bottom padding
-    float totalH  = headerH + tableH + padY * 2.0f - 1.0f;  // -1 to kill bottom slack
-    float totalW  = 380.0f * m_scale;
+    // Calculate dimensions
+    float rowH = ImGui::GetTextLineHeightWithSpacing();
+    float headerH = rowH * 1.5f;
+    float tableH = rowH * std::max(numDrivers, 1);
+    float separatorH = 4.0f * m_scale;
+    float footerH = rowH * 1.5f;
+    float padY = 6.0f * m_scale;
+    float totalH = headerH + separatorH + tableH + separatorH + footerH + padY * 2.0f;
+    float totalW = 520.0f * m_scale;
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
 
@@ -41,53 +52,52 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
     ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, config.alpha));
-    ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,  ImVec2(6, padY));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, padY));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(3, 1));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 2));
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse |
-                             ImGuiWindowFlags_NoTitleBar |
-                             ImGuiWindowFlags_NoResize   |
-                             ImGuiWindowFlags_NoScrollbar |
-                             ImGuiWindowFlags_NoFocusOnAppearing |
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoFocusOnAppearing |
                              ImGuiWindowFlags_NoNav;
-    if (!editMode) {
-        flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+    if (editMode) {
+        // allow move + resize
+    } else {
+        flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
     }
 
     ImGui::Begin("##RELATIVE", nullptr, flags);
     ImGui::SetWindowFontScale(m_scale);
 
-    // Save position
+    // Get window size
     ImVec2 pos = ImGui::GetWindowPos();
-    config.posX  = pos.x;
-    config.posY  = pos.y;
+    config.posX = pos.x;
+    config.posY = pos.y;
     config.width = ImGui::GetWindowSize().x;
     config.height = ImGui::GetWindowSize().y;
 
-    // ── Header (single line, compact) ───────────────────────
+    // === HEADER ===
     renderHeader(relative);
     ImGui::Separator();
 
-    // ── Driver table ────────────────────────────────────────
-    // Columns: Pos | #Num Name | SR | iR | Last | Gap
-    // We merge car number + name into one column to avoid the overlap bug
-    char buffer[128];
+    char buffer[256];
 
-    if (ImGui::BeginTable("RT", 6,
-            ImGuiTableFlags_RowBg |
-            ImGuiTableFlags_BordersInnerV |
-            ImGuiTableFlags_SizingFixedFit |
-            ImGuiTableFlags_NoHostExtendX)) {
+    // === TABLE ===
+    if (ImGui::BeginTable("RelativeTable", 8,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+            ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoHostExtendX)) {
 
-        ImGui::TableSetupColumn("Pos",   ImGuiTableColumnFlags_WidthFixed, 24.0f * m_scale);
-        ImGui::TableSetupColumn("Driver",ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("SR",    ImGuiTableColumnFlags_WidthFixed, 38.0f * m_scale);
-        ImGui::TableSetupColumn("iR",    ImGuiTableColumnFlags_WidthFixed, 38.0f * m_scale);
-        ImGui::TableSetupColumn("Last",  ImGuiTableColumnFlags_WidthFixed, 56.0f * m_scale);
-        ImGui::TableSetupColumn("Gap",   ImGuiTableColumnFlags_WidthFixed, 48.0f * m_scale);
+        // Setup columns with adjusted widths
+        ImGui::TableSetupColumn("Pos", ImGuiTableColumnFlags_WidthFixed, 28.0f * m_scale);
+        ImGui::TableSetupColumn("Logo", ImGuiTableColumnFlags_WidthFixed, 22.0f * m_scale);
+        ImGui::TableSetupColumn("Driver", ImGuiTableColumnFlags_WidthStretch);  // More room for driver info
+        ImGui::TableSetupColumn("SR", ImGuiTableColumnFlags_WidthFixed, 52.0f * m_scale);
+        ImGui::TableSetupColumn("iR", ImGuiTableColumnFlags_WidthFixed, 60.0f * m_scale);
+        ImGui::TableSetupColumn("Last", ImGuiTableColumnFlags_WidthFixed, 54.0f * m_scale);
+        ImGui::TableSetupColumn("Gap", ImGuiTableColumnFlags_WidthFixed, 44.0f * m_scale);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 4.0f * m_scale);  // Filler
 
+        // Render all drivers
         for (const auto& driver : drivers) {
             renderDriverRow(driver, driver.isPlayer, buffer);
         }
@@ -95,13 +105,17 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
         ImGui::EndTable();
     }
 
+    ImGui::Separator();
+
+    // === FOOTER ===
+    renderFooter(relative);
+
     ImGui::End();
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor(2);
 }
 
 void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
-    // Compact single-line header
     std::string series = relative->getSeriesName();
     if (series.empty() || series == "Unknown Series") {
         series = "Practice Session";
@@ -109,122 +123,252 @@ void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
     std::string lapInfo = relative->getLapInfo();
     int sof = relative->getSOF();
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.9f, 1.0f), "%s", series.c_str());
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "|");
-    ImGui::SameLine();
-    ImGui::Text("%s", lapInfo.c_str());
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "|");
-    ImGui::SameLine();
-    ImGui::Text("SOF: %d", sof);
+    // Make text bold by using a larger font size and center everything
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 4));
+
+    // Left side: Series name (more room)
+    ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "%s", series.c_str());
+    ImGui::SameLine(0, 16);
+
+    // Middle: Lap info
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", lapInfo.c_str());
+    ImGui::SameLine(0, 16);
+
+    // Right side: SOF (aligned to the right)
+    float availW = ImGui::GetContentRegionAvail().x;
+    ImVec2 sofTextSize = ImGui::CalcTextSize("SOF: 8888");
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availW - sofTextSize.x);
+    ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.6f, 1.0f), "SOF: %d", sof);
+
+    ImGui::PopStyleVar();
+}
+
+void RelativeWidget::renderFooter(iracing::RelativeCalculator* relative) {
+    char buf[128];
+    int incidents = relative->getPlayerIncidents();
+    float lastLap = relative->getPlayerLastLap();
+    float bestLap = relative->getPlayerBestLap();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12, 2));
+
+    // Format incidents
+    snprintf(buf, sizeof(buf), "Inc: %d", incidents);
+    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "%s", buf);
+    ImGui::SameLine(0, 12);
+
+    // Format last lap
+    formatTime(lastLap, buf);
+    ImGui::Text("Last: %s", buf);
+    ImGui::SameLine(0, 12);
+
+    // Format best lap
+    formatTime(bestLap, buf);
+    ImGui::TextColored(ImVec4(0.6f, 0.3f, 0.9f, 1.0f), "Best: %s", buf);
+
+    ImGui::PopStyleVar();
 }
 
 void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlayer, char* buffer) {
     ImGui::TableNextRow();
+    float rowH = ImGui::GetTextLineHeight();
 
     // Highlight player row
     if (isPlayer) {
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(255, 215, 0, 35));
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(255, 215, 0, 40));
     }
 
-    // ── Col 1: Position (tight) ─────────────────────────────
+    // === Col 1: Position ===
     ImGui::TableNextColumn();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
     if (driver.isOnPit) {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "PIT");
     } else {
         ImGui::Text("P%d", driver.relativePosition);
     }
 
-    // ── Col 2: #Number + Name (merged, no overlap) ──────────
+    // === Col 2: Car Brand Logo ===
     ImGui::TableNextColumn();
-    // Car number in yellow, then name
-    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.3f, 1.0f), "#%s", driver.carNumber.c_str());
-    ImGui::SameLine(0, 4);
-    if (isPlayer) {
-        ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", driver.driverName.c_str());
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
+    // Try to load and display logo
+    void* logoTexture = getCarBrandTexture(driver.carBrand);
+    if (logoTexture) {
+        ImGui::Image(logoTexture, ImVec2(16.0f * m_scale, 16.0f * m_scale));
     } else {
-        ImGui::Text("%s", driver.driverName.c_str());
+        ImGui::Dummy(ImVec2(16.0f * m_scale, 16.0f * m_scale));
     }
 
-    // ── Col 3: Safety Rating ────────────────────────────────
+    // === Col 3: Flag + #Number + Name ===
     ImGui::TableNextColumn();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.05f);
+    {
+        // Club/country flag
+        const char* flag = getClubFlag(driver.countryCode);
+        if (flag && flag[0] != '\0') {
+            ImGui::TextColored(ImVec4(0.7f, 0.8f, 0.9f, 1.0f), "%s", flag);
+            ImGui::SameLine(0, 4);
+        }
+
+        // Car number (yellow, bold)
+        ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.3f, 1.0f), "#%s", driver.carNumber.c_str());
+        ImGui::SameLine(0, 6);
+
+        // Driver name
+        if (isPlayer) {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.5f, 1.0f), "%s", driver.driverName.c_str());
+        } else {
+            ImGui::Text("%s", driver.driverName.c_str());
+        }
+    }
+
+    // === Col 4: Safety Rating ===
+    // Color boxes: darker for license letter, lighter for SR value
+    ImGui::TableNextColumn();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.1f);
     {
         float r, g, b;
         getSafetyRatingColor(driver.safetyRating, r, g, b);
         const char* letter = getSafetyRatingLetter(driver.safetyRating);
-        // Show fractional part: e.g. "B2.49" → show "B2.5"
-        snprintf(buffer, 128, "%s%.1f", letter, driver.safetyRating);
-        ImGui::TextColored(ImVec4(r, g, b, 1.0f), "%s", buffer);
+
+        // SR value (lighter color box)
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cp = ImGui::GetCursorScreenPos();
+        ImVec2 textSize = ImGui::CalcTextSize("9.9");
+        float boxW = textSize.x + 6.0f;
+        float boxH = rowH * 0.9f;
+
+        // Lighter background for SR value
+        ImU32 lightBgCol = IM_COL32(
+            (int)(r * 255 * 0.6f + 100),
+            (int)(g * 255 * 0.6f + 100),
+            (int)(b * 255 * 0.6f + 100),
+            200
+        );
+        dl->AddRectFilled(ImVec2(cp.x, cp.y), ImVec2(cp.x + boxW, cp.y + boxH), lightBgCol, 2.0f);
+
+        // SR value text (white, bold)
+        snprintf(buffer, 256, "%.1f", driver.safetyRating);
+        ImVec2 textPos = ImVec2(cp.x + boxW * 0.5f - textSize.x * 0.5f, cp.y + boxH * 0.5f - textSize.y * 0.5f);
+        dl->AddText(textPos, IM_COL32(255, 255, 255, 255), buffer);
+
+        ImGui::Dummy(ImVec2(boxW, boxH));
+        ImGui::SameLine(0, 4);
+
+        // License letter (darker color box)
+        cp = ImGui::GetCursorScreenPos();
+        textSize = ImGui::CalcTextSize("A");
+        boxW = textSize.x + 6.0f;
+
+        // Darker background for license letter
+        ImU32 darkBgCol = IM_COL32(
+            (int)(r * 255 * 0.8f),
+            (int)(g * 255 * 0.8f),
+            (int)(b * 255 * 0.8f),
+            220
+        );
+        dl->AddRectFilled(ImVec2(cp.x, cp.y), ImVec2(cp.x + boxW, cp.y + boxH), darkBgCol, 2.0f);
+
+        // License letter text (white, bold)
+        textPos = ImVec2(cp.x + boxW * 0.5f - textSize.x * 0.5f, cp.y + boxH * 0.5f - textSize.y * 0.5f);
+        dl->AddText(textPos, IM_COL32(255, 255, 255, 255), letter);
+
+        ImGui::Dummy(ImVec2(boxW, boxH));
     }
 
-    // ── Col 4: iRating ──────────────────────────────────────
+    // === Col 5: iRating ===
     ImGui::TableNextColumn();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
     {
+        // Format iRating
         if (driver.iRating >= 1000) {
-            snprintf(buffer, 128, "%.1fk", driver.iRating / 1000.0f);
+            snprintf(buffer, 256, "%.1fk", driver.iRating / 1000.0f);
         } else {
-            snprintf(buffer, 128, "%d", driver.iRating);
+            snprintf(buffer, 256, "%d", driver.iRating);
         }
-        if (driver.iRatingProjection != 0) {
-            int diff = driver.iRatingProjection - driver.iRating;
-            if (diff > 0) {
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%s", buffer);
+
+        // Draw white background box
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cp = ImGui::GetCursorScreenPos();
+        ImVec2 textSize = ImGui::CalcTextSize(buffer);
+        float boxW = textSize.x + 8.0f;
+        float boxH = rowH * 0.85f;
+
+        dl->AddRectFilled(ImVec2(cp.x, cp.y), ImVec2(cp.x + boxW, cp.y + boxH), IM_COL32(255, 255, 255, 200), 2.0f);
+
+        // iRating text (black, bold)
+        ImVec2 textPos = ImVec2(cp.x + boxW * 0.5f - textSize.x * 0.5f, cp.y + boxH * 0.5f - textSize.y * 0.5f);
+        dl->AddText(textPos, IM_COL32(0, 0, 0, 255), buffer);
+
+        ImGui::Dummy(ImVec2(boxW, boxH));
+
+        // iRating delta projection
+        int delta = driver.iRatingProjection;
+        if (delta != 0) {
+            ImGui::SameLine(0, 4);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.1f);
+            char deltaBuf[32];
+            if (delta > 0) {
+                snprintf(deltaBuf, 32, "+%d", delta);
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%s", deltaBuf);
             } else {
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", buffer);
+                snprintf(deltaBuf, 32, "%d", delta);
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", deltaBuf);
             }
+        }
+    }
+
+    // === Col 6: Last Lap Time ===
+    ImGui::TableNextColumn();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
+    {
+        formatTime(driver.lastLapTime, buffer);
+        ImGui::Text("%s", buffer);
+    }
+
+    // === Col 7: Gap ===
+    ImGui::TableNextColumn();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + rowH * 0.15f);
+    {
+        formatGap(driver.gapToPlayer, buffer);
+        if (driver.gapToPlayer > 0) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", buffer);
+        } else if (driver.gapToPlayer < 0) {
+            ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "%s", buffer);
         } else {
             ImGui::Text("%s", buffer);
         }
-    }
-
-    // ── Col 5: Last lap time ────────────────────────────────
-    ImGui::TableNextColumn();
-    formatTime(driver.lastLapTime, buffer);
-    ImGui::Text("%s", buffer);
-
-    // ── Col 6: Gap to player ────────────────────────────────
-    ImGui::TableNextColumn();
-    formatGap(driver.gapToPlayer, buffer);
-    if (driver.gapToPlayer > 0) {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", buffer);
-    } else if (driver.gapToPlayer < 0) {
-        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "%s", buffer);
-    } else {
-        ImGui::Text("%s", buffer);
     }
 }
 
 void RelativeWidget::formatGap(float gap, char* buffer) {
     if (std::abs(gap) < 0.01f) {
-        snprintf(buffer, 128, "---");
+        snprintf(buffer, 256, "---");
     } else if (gap > 0) {
         if (gap >= 1.0f) {
-            snprintf(buffer, 128, "+%.0fL", gap);
+            snprintf(buffer, 256, "+%.0fL", gap);
         } else {
-            snprintf(buffer, 128, "+%.1fs", gap);
+            snprintf(buffer, 256, "+%.1fs", gap);
         }
     } else {
         float a = std::abs(gap);
         if (a >= 1.0f) {
-            snprintf(buffer, 128, "-%.0fL", a);
+            snprintf(buffer, 256, "-%.0fL", a);
         } else {
-            snprintf(buffer, 128, "-%.1fs", a);
+            snprintf(buffer, 256, "-%.1fs", a);
         }
     }
 }
 
 void RelativeWidget::formatTime(float seconds, char* buffer) {
     if (seconds < 0.0f) {
-        snprintf(buffer, 128, "---");
+        snprintf(buffer, 256, "---");
         return;
     }
-    int min = static_cast<int>(seconds / 60.0f);
-    float sec = seconds - (min * 60.0f);
-    if (min > 0) {
-        snprintf(buffer, 128, "%d:%05.2f", min, sec);
+    int mins = static_cast<int>(seconds / 60.0f);
+    float secs = seconds - (mins * 60.0f);
+    if (mins > 0) {
+        snprintf(buffer, 256, "%d:%05.2f", mins, secs);
     } else {
-        snprintf(buffer, 128, "%.2f", sec);
+        snprintf(buffer, 256, "%.2f", secs);
     }
 }
 
@@ -237,11 +381,84 @@ const char* RelativeWidget::getSafetyRatingLetter(float sr) {
 }
 
 void RelativeWidget::getSafetyRatingColor(float sr, float& r, float& g, float& b) {
-    if (sr < 1.0f)      { r = 1.0f; g = 0.2f; b = 0.2f; }   // R – Red
-    else if (sr < 2.0f) { r = 1.0f; g = 0.6f; b = 0.0f; }   // D – Orange
-    else if (sr < 3.0f) { r = 1.0f; g = 1.0f; b = 0.0f; }   // C – Yellow
-    else if (sr < 4.0f) { r = 0.2f; g = 1.0f; b = 0.2f; }   // B – Green
-    else                { r = 0.3f; g = 0.6f; b = 1.0f; }   // A – Blue
+    if (sr < 1.0f) {
+        r = 1.0f; g = 0.2f; b = 0.2f;  // Red
+    } else if (sr < 2.0f) {
+        r = 1.0f; g = 0.6f; b = 0.0f;  // Orange
+    } else if (sr < 3.0f) {
+        r = 1.0f; g = 1.0f; b = 0.0f;  // Yellow
+    } else if (sr < 4.0f) {
+        r = 0.2f; g = 1.0f; b = 0.2f;  // Green
+    } else {
+        r = 0.3f; g = 0.6f; b = 1.0f;  // Blue
+    }
 }
 
-} // namespace ui
+const char* RelativeWidget::getClubFlag(const std::string& club) {
+    // Simple mapping for common country codes
+    static const std::unordered_map<std::string, const char*> flagMap = {
+        {"US", "🇺🇸"}, {"GB", "🇬🇧"}, {"DE", "🇩🇪"}, {"FR", "🇫🇷"},
+        {"ES", "🇪🇸"}, {"IT", "🇮🇹"}, {"NL", "🇳🇱"}, {"SE", "🇸🇪"},
+        {"NO", "🇳🇴"}, {"DK", "🇩🇰"}, {"FI", "🇫🇮"}, {"CA", "🇨🇦"},
+        {"AU", "🇦🇺"}, {"BR", "🇧🇷"}, {"JP", "🇯🇵"}, {"KR", "🇰🇷"},
+        {"MX", "🇲🇽"}, {"ZA", "🇿🇦"}, {"NZ", "🇳🇿"}, {"SG", "🇸🇬"},
+    };
+
+    auto it = flagMap.find(club);
+    if (it != flagMap.end()) {
+        return it->second;
+    }
+    return "";
+}
+
+bool RelativeWidget::loadCarBrandLogo(const std::string& brand) {
+    // Create normalized brand name for filename
+    std::string normalized = brand;
+    for (auto& c : normalized) {
+        c = std::tolower(static_cast<unsigned char>(c));
+    }
+
+    // Try multiple paths and extensions
+    std::vector<std::string> possiblePaths = {
+        "assets/car_brands/" + normalized + ".png",
+        "assets/car_brands/" + brand + ".png",
+        "./assets/car_brands/" + normalized + ".png",
+        "./assets/car_brands/" + brand + ".png",
+    };
+
+    for (const auto& path : possiblePaths) {
+        if (fs::exists(path)) {
+            // Load image with stb_image
+            int width, height, channels;
+            unsigned char* imageData = stbi_load(path.c_str(), &width, &height, &channels, 4);
+            if (imageData) {
+                // Here you would create a texture with OpenGL/graphics API
+                // For now, return null - implementation depends on your graphics backend
+                stbi_image_free(imageData);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void* RelativeWidget::getCarBrandTexture(const std::string& brand) {
+    // Check cache first
+    auto it = m_logoCache.find(brand);
+    if (it != m_logoCache.end()) {
+        return it->second;
+    }
+
+    // Try to load if not in cache
+    if (loadCarBrandLogo(brand)) {
+        // In a real implementation, you'd store the actual texture pointer
+        // For now, return a placeholder
+        m_logoCache[brand] = nullptr;  // Would be the texture pointer
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
+}  // namespace ui
