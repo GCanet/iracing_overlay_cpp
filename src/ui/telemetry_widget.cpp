@@ -101,8 +101,8 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
     const float padX = 6.0f * m_scale;
     const float padY = 4.0f * m_scale;
 
-    float totalW = 380.0f * m_scale;           // wider to fit all elements cleanly
-    float totalH = rpmH + gapRpm + rowH + padY * 2.0f;
+    float totalW = 330.0f * m_scale;           // reduced width (50 pixels smaller)
+    float totalH = rpmH + gapRpm + rowH + padY * 3.0f;  // increased bottom padding to prevent cutoff
 
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
 
@@ -147,7 +147,7 @@ void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& co
     float gap = 4.0f * m_scale;
 
     float traceW = contentW - absW - steerW - pedalNumW - gearW - gap * 4.0f;
-    if (traceW < 80.0f * m_scale) traceW = 80.0f * m_scale; // minimum trace width
+    if (traceW < 40.0f * m_scale) traceW = 40.0f * m_scale; // minimum trace width
 
     renderABS(absW, rowH);
     ImGui::SameLine(0.0f, gap);
@@ -182,49 +182,46 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float rpmPct = (m_maxRPM > 0) ? std::min(m_currentRPM / m_maxRPM, 1.0f) : 0.0f;
+    float rpmPct = (m_maxRPM > 0) ? (m_currentRPM / m_maxRPM) : 0.0f;
+    float blinkPct = (m_maxRPM > 0) ? (m_blinkRPM / m_maxRPM) : 0.8f;
 
-    // 10 circular lights like iRdashies
-    const int numLights = 10;
-    float radius = height * 0.4f;
-    float diameter = radius * 2.0f;
-    float totalLightsW = numLights * diameter + (numLights - 1) * (2.0f * m_scale);
-    float startX = p.x + (width - totalLightsW) * 0.5f; // center horizontally
-    float centerY = p.y + height * 0.5f;
-    float spacing = diameter + 2.0f * m_scale;
+    bool blink = std::fmod(ImGui::GetTime() * 2.5f, 1.0f) < 0.5f;
+    bool isRedline = (rpmPct >= blinkPct) && blink;
 
-    // Color pattern for each light position (matching iRdashies):
-    // Positions: 0=green, 1=green, 2=yellow, 3=yellow, 4=grey, 5=yellow, 6=yellow, 7=green, 8=green, 9=green
-    ImU32 lightColors[10] = {
-        IM_COL32(0, 200, 0, 255),     // 0: green
-        IM_COL32(0, 200, 0, 255),     // 1: green
-        IM_COL32(220, 200, 0, 255),   // 2: yellow
-        IM_COL32(220, 200, 0, 255),   // 3: yellow
-        IM_COL32(100, 100, 100, 255), // 4: grey (neutral)
-        IM_COL32(220, 200, 0, 255),   // 5: yellow
-        IM_COL32(220, 200, 0, 255),   // 6: yellow
-        IM_COL32(0, 200, 0, 255),     // 7: green
-        IM_COL32(0, 200, 0, 255),     // 8: green
-        IM_COL32(0, 200, 0, 255),     // 9: green
-    };
+    // 10 lights: center them in the available width
+    float dotRadius = height * 0.35f;
+    float spacing = (width / 10.0f);
+    float startX = p.x + spacing * 0.5f;
 
-    int activeLights = static_cast<int>(rpmPct * numLights + 0.5f);
-    bool blinking = (m_blinkRPM > 0 && m_currentRPM >= m_blinkRPM);
-
-    for (int i = 0; i < numLights; i++) {
-        float cx = startX + i * spacing + radius;
-        ImVec2 center(cx, centerY);
-
-        if (blinking) {
-            // All lights blink red at redline
-            int blink = static_cast<int>(ImGui::GetTime() * 10) % 2;
-            ImU32 col = blink ? IM_COL32(255, 0, 0, 255) : IM_COL32(40, 0, 0, 180);
-            dl->AddCircleFilled(center, radius, col, 16);
-        } else if (i < activeLights) {
-            dl->AddCircleFilled(center, radius, lightColors[i], 16);
+    // Colors: green at start, yellow in middle, grey at end
+    ImU32 colors[10];
+    for (int i = 0; i < 10; i++) {
+        if (i < 2) {
+            colors[i] = IM_COL32(0, 180, 0, 180);  // Green
+        } else if (i < 8) {
+            colors[i] = IM_COL32(180, 180, 0, 180);  // Yellow
         } else {
-            // Inactive: dark circle
-            dl->AddCircleFilled(center, radius, IM_COL32(25, 25, 25, 200), 16);
+            colors[i] = IM_COL32(100, 100, 100, 180);  // Grey
+        }
+    }
+
+    // Draw lights
+    for (int i = 0; i < 10; i++) {
+        float x = startX + i * spacing;
+        ImU32 lightCol = colors[i];
+
+        // If in redline zone and blinking, show red
+        if (isRedline) {
+            lightCol = IM_COL32(255, 0, 0, 220);
+        }
+
+        // Draw filled circle if RPM exceeds this light's threshold
+        float threshold = (i + 1) / 10.0f;
+        if (rpmPct >= threshold) {
+            dl->AddCircleFilled(ImVec2(x, p.y + height * 0.5f), dotRadius, lightCol, 8);
+        } else {
+            // Unfilled circle
+            dl->AddCircle(ImVec2(x, p.y + height * 0.5f), dotRadius, lightCol, 8, 1.5f);
         }
     }
 
@@ -232,102 +229,53 @@ void TelemetryWidget::renderShiftLights(float width, float height) {
 }
 
 // =============================================================================
-// ABS INDICATOR - Standard ABS icon with circle + parentheses (like iRdashies)
-// Falls back to texture if available, otherwise draws the icon procedurally
+// ABS - Circle with parentheses or icon
 // =============================================================================
 void TelemetryWidget::renderABS(float width, float height) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    if (m_absActive && m_absOnTexture) {
-        ImGui::Image((ImTextureID)(intptr_t)m_absOnTexture, ImVec2(width, height));
-        return;
-    }
-    if (!m_absActive && m_absOffTexture) {
-        ImGui::Image((ImTextureID)(intptr_t)m_absOffTexture, ImVec2(width, height));
-        return;
-    }
-
-    // Fallback: draw ABS icon like iRdashies - circle with "ABS" text + parentheses
-    ImDrawList* dl = ImGui::GetWindowDrawList();
     float cx = p.x + width * 0.5f;
     float cy = p.y + height * 0.5f;
-    float r = std::min(width, height) * 0.32f;
+    float radius = std::min(width, height) * 0.35f;
 
-    if (m_absActive) {
-        // Active: bright amber/yellow
-        ImU32 activeCol = IM_COL32(255, 180, 0, 255);
+    ImU32 absCol = m_absActive ? IM_COL32(255, 100, 0, 220) : IM_COL32(80, 80, 80, 180);
 
-        // Outer parentheses (sensor arcs)
-        float arcR = r + 4.0f * m_scale;
-        float arcThick = 2.0f * m_scale;
-        // Left parenthesis
-        dl->PathArcTo(ImVec2(cx, cy), arcR, 2.4f, 3.9f, 12);
-        dl->PathStroke(activeCol, false, arcThick);
-        // Right parenthesis
-        dl->PathArcTo(ImVec2(cx, cy), arcR, -0.75f, 0.75f, 12);
-        dl->PathStroke(activeCol, false, arcThick);
+    // Draw circle
+    dl->AddCircle(ImVec2(cx, cy), radius, absCol, 12, 2.0f * m_scale);
 
-        // Inner circle
-        dl->AddCircle(ImVec2(cx, cy), r, activeCol, 20, 2.0f * m_scale);
-
-        // "ABS" text
-        const char* txt = "ABS";
-        float fontSize = r * 0.85f;
-        ImVec2 ts = ImGui::CalcTextSize(txt);
-        float textScale = fontSize / ts.y;
-        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * textScale,
-                    ImVec2(cx - ts.x * textScale * 0.5f, cy - ts.y * textScale * 0.5f),
-                    activeCol, txt);
-    } else {
-        // Inactive: dim grey
-        ImU32 dimCol = IM_COL32(60, 60, 60, 180);
-
-        float arcR = r + 4.0f * m_scale;
-        float arcThick = 1.5f * m_scale;
-        dl->PathArcTo(ImVec2(cx, cy), arcR, 2.4f, 3.9f, 12);
-        dl->PathStroke(dimCol, false, arcThick);
-        dl->PathArcTo(ImVec2(cx, cy), arcR, -0.75f, 0.75f, 12);
-        dl->PathStroke(dimCol, false, arcThick);
-
-        dl->AddCircle(ImVec2(cx, cy), r, dimCol, 20, 1.5f * m_scale);
-
-        const char* txt = "ABS";
-        float fontSize = r * 0.85f;
-        ImVec2 ts = ImGui::CalcTextSize(txt);
-        float textScale = fontSize / ts.y;
-        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * textScale,
-                    ImVec2(cx - ts.x * textScale * 0.5f, cy - ts.y * textScale * 0.5f),
-                    dimCol, txt);
-    }
+    // Draw "ABS" text inside circle
+    char absBuf[] = "ABS";
+    ImVec2 textSize = ImGui::CalcTextSize(absBuf);
+    ImVec2 textPos = ImVec2(cx - textSize.x * 0.5f, cy - textSize.y * 0.5f);
+    dl->AddText(textPos, absCol, absBuf);
 
     ImGui::Dummy(ImVec2(width, height));
 }
 
 // =============================================================================
-// PEDAL BARS - Vertical bars like iRdashies (Throttle %, Brake %, Speed numeric)
-// Shows numeric values: throttle, brake, clutch percentages
+// PEDAL BARS - Throttle, Brake, Clutch as vertical bars with numeric values above
 // =============================================================================
 void TelemetryWidget::renderPedalBars(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    float barHeight = height * 0.75f;
-    float topGap = (height - barHeight) * 0.5f;
-    float barW = (width - 4.0f * m_scale) / 3.0f;
-    float gap = 2.0f * m_scale;
-
-    float pedals[3] = {m_throttle, m_brake, m_clutch};
+    float pedals[3] = { m_throttle, m_brake, m_clutch };
     ImU32 colors[3] = {
-        IM_COL32(0, 220, 0, 255),       // Throttle: green
-        IM_COL32(255, 40, 40, 255),      // Brake: red
-        IM_COL32(80, 140, 220, 255)      // Clutch: blue
+        IM_COL32(0, 220, 0, 220),      // Throttle = green
+        IM_COL32(255, 40, 40, 220),    // Brake = red
+        IM_COL32(80, 140, 220, 220)    // Clutch = blue
     };
 
+    float barW = width / 3.0f * 0.8f;
+    float barStartX = p.x + width * 0.1f;
+    float barH = height * 0.65f;
+    float barTop = p.y + height * 0.15f;
+
     for (int i = 0; i < 3; i++) {
-        float x = p.x + i * (barW + gap);
-        float filledH = barHeight * pedals[i];
-        float barTop = p.y + topGap;
-        float barBottom = barTop + barHeight;
+        float x = barStartX + i * width / 3.0f;
+        float filledH = barH * pedals[i];
+        float barBottom = barTop + barH;
 
         // Background bar
         dl->AddRectFilled(ImVec2(x, barTop), ImVec2(x + barW, barBottom),
@@ -399,7 +347,7 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
 
 // =============================================================================
 // GEAR + SPEED - Large gear number, speed below with "km/h" label
-// Like iRdashies: big gear, speed + unit below
+// Like iRdashies: big gear, speed + unit below (increased font sizes)
 // =============================================================================
 void TelemetryWidget::renderGearSpeed(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -420,8 +368,8 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
 
     snprintf(speedBuf, sizeof(speedBuf), "%d", m_speed);
 
-    // Gear: large, centered, top portion
-    float gearFontSize = height * 0.52f;
+    // Gear: large, centered, top portion (INCREASED FROM 0.52 TO 0.58)
+    float gearFontSize = height * 0.58f;
     ImVec2 gearSize = ImGui::CalcTextSize(gearBuf);
     float gearScale = gearFontSize / gearSize.y;
     float gearX = p.x + (width - gearSize.x * gearScale) * 0.5f;
@@ -435,8 +383,8 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale,
                 ImVec2(gearX, gearY), gearCol, gearBuf);
 
-    // Speed: medium, below gear
-    float speedFontSize = height * 0.22f;
+    // Speed: medium, below gear (INCREASED FROM 0.22 TO 0.28)
+    float speedFontSize = height * 0.28f;
     ImVec2 speedSize = ImGui::CalcTextSize(speedBuf);
     float speedScale = speedFontSize / speedSize.y;
     float speedX = p.x + (width - speedSize.x * speedScale) * 0.5f;
@@ -445,8 +393,8 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale,
                 ImVec2(speedX, speedY), IM_COL32(200, 200, 200, 255), speedBuf);
 
-    // "km/h" label: small, below speed
-    float unitFontSize = height * 0.13f;
+    // "km/h" label: small, below speed (INCREASED FROM 0.13 TO 0.18)
+    float unitFontSize = height * 0.18f;
     ImVec2 unitSize = ImGui::CalcTextSize(unitBuf);
     float unitScale = unitFontSize / unitSize.y;
     float unitX = p.x + (width - unitSize.x * unitScale) * 0.5f;

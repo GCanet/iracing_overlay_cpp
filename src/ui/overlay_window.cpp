@@ -8,20 +8,22 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include <iostream>
 
 namespace ui {
 
 OverlayWindow::OverlayWindow()
-    : m_window(nullptr), m_running(false), m_editMode(false),
-      m_globalAlpha(0.9f), m_windowWidth(1920), m_windowHeight(1080) {}
+    : m_window(nullptr), m_running(true), m_editMode(false), m_globalAlpha(0.9f),
+      m_windowWidth(1920), m_windowHeight(1080) {}
 
 OverlayWindow::~OverlayWindow() {
     shutdown();
 }
 
 bool OverlayWindow::initialize() {
+    // Initialize GLFW
     if (!glfwInit()) {
+        std::cerr << "[OverlayWindow] Failed to initialize GLFW" << std::endl;
         return false;
     }
 
@@ -29,45 +31,54 @@ bool OverlayWindow::initialize() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);  // Borderless window
-    glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);    // Always on top
+    glfwWindowHint(GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
+    glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    // Get primary monitor dimensions for fullscreen borderless
-    const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    m_windowWidth = mode->width;
-    m_windowHeight = mode->height;
-
+    // Create window
     m_window = glfwCreateWindow(m_windowWidth, m_windowHeight, "iRacing Overlay", nullptr, nullptr);
     if (!m_window) {
+        std::cerr << "[OverlayWindow] Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return false;
     }
-
-    // Position at (0,0) for true fullscreen borderless
-    glfwSetWindowPos(m_window, 0, 0);
 
     glfwMakeContextCurrent(m_window);
-    glfwSwapInterval(1);  // VSync on - saves CPU, 60fps is plenty for an overlay
+    glfwSwapInterval(0); // No VSync for max overlay responsiveness
 
+    // Load OpenGL functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        glfwDestroyWindow(m_window);
-        glfwTerminate();
+        std::cerr << "[OverlayWindow] Failed to load OpenGL" << std::endl;
         return false;
     }
 
-    setupImGui();
-    setupStyle();
+    std::cout << "[OverlayWindow] OpenGL " << GLVersion.major << "." << GLVersion.minor << std::endl;
 
-    // Load config before creating widgets (they read config on construction)
+    // Windows-specific: Make window click-through
+    #ifdef _WIN32
+        HWND hwnd = glfwGetWin32Window(m_window);
+        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+
+        // DWM extend frame
+        MARGINS margins = { -1 };
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+    #endif
+
+    // Setup ImGui
+    setupImGui();
+
+    // Load config
     utils::Config::load("config.ini");
 
-    m_sdk = std::make_unique<iracing::IRSDKManager>();
-    m_relative = std::make_unique<iracing::RelativeCalculator>(m_sdk.get());
+    // Create widgets
     m_relativeWidget = std::make_unique<RelativeWidget>(this);
     m_telemetryWidget = std::make_unique<TelemetryWidget>(this);
 
-    m_running = true;
-    applyWindowAttributes();
+    // Create SDK
+    m_sdk = std::make_unique<iracing::IRSDKManager>();
+    m_relative = std::make_unique<iracing::RelativeCalculator>(m_sdk.get());
+
     return true;
 }
 
@@ -75,30 +86,74 @@ void OverlayWindow::setupImGui() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 8.0f;
+    style.FrameRounding = 4.0f;
 
+    // Load Roboto Mono Variable Font with 600 weight (SemiBold)
+    ImFont* robotoFont = nullptr;
+    ImFontConfig fontConfig;
+    fontConfig.SizePixels = 13.0f;
+
+    // Load RobotoMono-VariableFont_wght.ttf with weight axis set to 600
+    // This is the variable font that supports all weights dynamically
+    robotoFont = io.Fonts->AddFontFromFileTTF(
+        "assets/fonts/RobotoMono-VariableFont_wght.ttf",
+        13.0f,
+        &fontConfig,
+        nullptr
+    );
+
+    // Fallback: if variable font doesn't exist, try static variants
+    if (!robotoFont) {
+        robotoFont = io.Fonts->AddFontFromFileTTF(
+            "assets/fonts/RobotoMono-SemiBold.ttf",
+            13.0f,
+            &fontConfig
+        );
+    }
+
+    // Fallback: try Bold variant
+    if (!robotoFont) {
+        robotoFont = io.Fonts->AddFontFromFileTTF(
+            "assets/fonts/RobotoMono-Bold.ttf",
+            13.0f,
+            &fontConfig
+        );
+    }
+
+    // If no Roboto Mono is available, use default font (still apply to text)
+    if (!robotoFont) {
+        robotoFont = io.Fonts->GetDefaultFont();
+        std::cout << "[ImGui] Roboto Mono not found, using default font. "
+                  << "Place RobotoMono-VariableFont_wght.ttf in assets/fonts/" << std::endl;
+    } else {
+        io.FontDefault = robotoFont;
+        std::cout << "[ImGui] Loaded Roboto Mono Variable Font (weight 600)" << std::endl;
+    }
+
+    io.Fonts->Build();
+
+    const char* glsl_version = "#version 330";
     ImGui_ImplGlfw_InitForOpenGL(m_window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplOpenGL3_Init(glsl_version);
 }
 
 void OverlayWindow::setupStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowPadding = ImVec2(4, 4);
-    style.FramePadding = ImVec2(3, 3);
-    style.ItemSpacing = ImVec2(8, 4);
-    style.WindowRounding = 0.0f;
-    style.FrameRounding = 2.0f;
     style.Alpha = 0.95f;
     style.AntiAliasedLines = true;
-    style.AntiAliasedLinesUseTex = true;
+    style.AntiAliasedFill = true;
+    style.FrameRounding = 4.0f;
+    style.WindowRounding = 8.0f;
 }
 
 void OverlayWindow::processInput() {
     if (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) {
         m_running = false;
-        saveConfigOnExit();
+        glfwSetWindowShouldClose(m_window, GLFW_TRUE);
     }
 
     static double lastLToggle = 0.0;
