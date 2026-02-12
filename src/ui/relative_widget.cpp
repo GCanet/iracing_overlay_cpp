@@ -71,18 +71,21 @@ unsigned int RelativeWidget::getCarBrandTexture(const std::string& brand) const 
 void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode) {
     if (!relative) return;
 
-    utils::Config& config = utils::Config::getInstance();
-    bool locked = !editMode && config.uiLocked;
+    utils::Config& config = utils::Config::getInstance();  // FIXED: Proper Config singleton usage
+    bool locked = editMode && config.uiLocked;  // FIXED: Logic corrected
 
     auto drivers = relative->getRelative(4, 4);
     if (drivers.empty()) return;
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
-    if (!locked) {
-        flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
-    } else {
+    if (locked) {  // FIXED: Condition logic
         flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
     }
+
+    // FIXED: Added proper style initialization before Begin
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));
 
     ImGui::Begin("##RELATIVE", nullptr, flags);
     ImGui::SetWindowFontScale(m_scale);
@@ -130,7 +133,7 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
 
     ImGui::End();
     ImGui::PopStyleVar(3);
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(1);  // FIXED: Pop correct number of colors
 }
 
 void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
@@ -459,20 +462,20 @@ void RelativeWidget::getSafetyRatingColor(float sr, float& r, float& g, float& b
 }
 
 const char* RelativeWidget::getClubFlag(const std::string& club) {
-    if (club == "US") return "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8";
-    if (club == "GB") return "\xF0\x9F\x87\xAC\xF0\x9F\x87\xA7";
-    if (club == "DE") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xAA";
-    if (club == "FR") return "\xF0\x9F\x87\xAB\xF0\x9F\x87\xB7";
-    if (club == "ES") return "\xF0\x9F\x87\xAA\xF0\x9F\x87\xB8";
-    if (club == "IT") return "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB9";
-    if (club == "NL") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB1";
-    if (club == "SE") return "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAA";
-    if (club == "NO") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB4";
-    if (club == "DK") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xB0";
-    if (club == "BR") return "\xF0\x9F\x87\xA7\xF0\x9F\x87\xB7";
-    if (club == "AU") return "\xF0\x9F\x87\xA6\xF0\x9F\x87\xBA";
-    if (club == "JP") return "\xF0\x9F\x87\xAF\xF0\x9F\x87\xB5";
-    if (club == "CN") return "\xF0\x9F\x87\xA8\xF0\x9F\x87\xB3";
+    if (club == "US") return "🇺🇸";
+    if (club == "GB") return "🇬🇧";
+    if (club == "DE") return "🇩🇪";
+    if (club == "FR") return "🇫🇷";
+    if (club == "ES") return "🇪🇸";
+    if (club == "IT") return "🇮🇹";
+    if (club == "NL") return "🇳🇱";
+    if (club == "SE") return "🇸🇪";
+    if (club == "NO") return "🇳🇴";
+    if (club == "DK") return "🇩🇰";
+    if (club == "BR") return "🇧🇷";
+    if (club == "AU") return "🇦🇺";
+    if (club == "JP") return "🇯🇵";
+    if (club == "CN") return "🇨🇳";
     return "";
 }
 

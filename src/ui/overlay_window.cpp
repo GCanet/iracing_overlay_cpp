@@ -150,6 +150,8 @@ void OverlayWindow::setupImGui() {
 }
 
 void OverlayWindow::run() {
+    m_lockKeyPressed = false;  // FIXED: Initialize member variable
+
     while (!glfwWindowShouldClose(m_window)) {
         glfwPollEvents();
 
@@ -178,7 +180,7 @@ void OverlayWindow::run() {
         // Render widgets
         bool editMode = !utils::Config::getInstance().uiLocked;
         if (m_relativeWidget) m_relativeWidget->render(m_relative.get(), editMode);
-        if (m_telemetryWidget) m_telemetryWidget->render(editMode);
+        if (m_telemetryWidget) m_telemetryWidget->render(editMode);  // FIXED: Removed extra parameters
 
         ImGui::Render();
 

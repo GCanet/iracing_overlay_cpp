@@ -20,7 +20,7 @@ public:
     OverlayWindow();
     ~OverlayWindow();
 
-    bool initialize();
+    bool initialize(const char* title, int width, int height);
     void run();
     void shutdown();
 
@@ -36,6 +36,7 @@ private:
     void handleInput();
 
     GLFWwindow* m_window;
+    bool m_lockKeyPressed = false;  // FIXED: Added missing member variable
 
     // iRacing data
     std::unique_ptr<iracing::IRSDKManager> m_sdk;
