@@ -5,13 +5,17 @@
 #include <algorithm>
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace ui {
 
-TelemetryWidget::TelemetryWidget()
+TelemetryWidget::TelemetryWidget(OverlayWindow* overlay)
     : m_currentRPM(0.0f), m_maxRPM(7000.0f), m_blinkRPM(6500.0f),
       m_throttle(0.0f), m_brake(0.0f), m_clutch(0.0f), m_gear(0), m_speed(0),
       m_steeringAngle(0.0f), m_steeringAngleMax(180.0f),
-      m_absActive(false), m_scale(1.0f), m_historyHead(0) {
+      m_absActive(false), m_scale(1.0f), m_historyHead(0), m_overlay(overlay) {
     // Initialize history buffers
     m_throttleHistory.resize(256, 0.0f);
     m_brakeHistory.resize(256, 0.0f);
@@ -20,34 +24,33 @@ TelemetryWidget::TelemetryWidget()
 
 TelemetryWidget::~TelemetryWidget() {}
 
-void TelemetryWidget::update(const idata::TelemetryData& data) {
-    m_currentRPM = data.rpm;
-    m_maxRPM = data.maxRPM;
-    m_blinkRPM = data.blinkRPM;
-    m_throttle = data.throttle;
-    m_brake = data.brake;
-    m_clutch = data.clutch;
-    m_gear = data.gear;
-    m_speed = data.speed;
-    m_steeringAngle = data.steeringAngle;
-    m_absActive = data.absActive;
+void TelemetryWidget::render(iracing::IRSDKManager* sdk, utils::WidgetConfig& config, bool editMode) {
+    if (!sdk) return;
 
-    // Push to history (0-100 range)
-    m_throttleHistory[m_historyHead] = m_throttle * 100.0f;
-    m_brakeHistory[m_historyHead] = m_brake * 100.0f;
-    m_clutchHistory[m_historyHead] = m_clutch * 100.0f;
-    m_historyHead = (m_historyHead + 1) % 256;
-}
+    // Read from SDK
+    if (sdk->isSessionActive()) {
+        m_currentRPM = sdk->getFloat("RPM", 0.0f);
+        m_maxRPM = sdk->getFloat("ShiftGrindRPM", 7000.0f);
+        m_blinkRPM = sdk->getFloat("DriverCarSLBlinkRPM", 6500.0f);
+        m_throttle = sdk->getFloat("Throttle", 0.0f);
+        m_brake = sdk->getFloat("Brake", 0.0f);
+        m_clutch = sdk->getFloat("Clutch", 0.0f);
+        m_gear = sdk->getInt("Gear", 0);
+        m_speed = static_cast<int>(sdk->getFloat("Speed", 0.0f));
+        m_steeringAngle = sdk->getFloat("SteeringWheelAngle", 0.0f);
+        m_absActive = sdk->getBool("BrakeABSactive", false);
 
-void TelemetryWidget::setScale(float scale) {
-    m_scale = scale;
-}
+        // Push to history (0-100 range)
+        m_throttleHistory[m_historyHead] = m_throttle * 100.0f;
+        m_brakeHistory[m_historyHead] = m_brake * 100.0f;
+        m_clutchHistory[m_historyHead] = m_clutch * 100.0f;
+        m_historyHead = (m_historyHead + 1) % 256;
+    }
 
-void TelemetryWidget::render(utils::WidgetConfig& config, bool editMode) {
     const float padY = 6.0f * m_scale;
     const float rpmH = 24.0f * m_scale;
     const float rowH = 28.0f * m_scale;
-    const float gapRpm = 6.0f * m_scale;  // Reduced gap between RPM and input row
+    const float gapRpm = 6.0f * m_scale;
 
     float totalW = 300.0f * m_scale;
     float totalH = rpmH + gapRpm + rowH + padY * 2.0f;
@@ -55,7 +58,6 @@ void TelemetryWidget::render(utils::WidgetConfig& config, bool editMode) {
     ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
 
     if (config.posX < 0 || config.posY < 0) {
-        // Default position: PosX=690 PosY=720
         config.posX = 690.0f;
         config.posY = 720.0f;
     }
@@ -85,7 +87,7 @@ void TelemetryWidget::render(utils::WidgetConfig& config, bool editMode) {
 
     float contentW = ImGui::GetContentRegionAvail().x;
 
-    // RPM lights (8 lights, first light removed so now 7)
+    // RPM lights
     renderShiftLights(contentW, rpmH);
     ImGui::Dummy(ImVec2(0, gapRpm));
 
@@ -96,37 +98,26 @@ void TelemetryWidget::render(utils::WidgetConfig& config, bool editMode) {
     float steerW = rowH;
     float gap = 4.0f * m_scale;
     float gapTight = 1.0f * m_scale;
-    float marginAbsLR = 2.0f * m_scale;  // Margin left and right of ABS
+    float marginAbsLR = 2.0f * m_scale;
 
-    // History trace width reduced by 65 pixels
     float traceW = contentW - absW - barsW - gearW - steerW - gap * 2.0f - gapTight * 2.0f - marginAbsLR * 2.0f - 65.0f;
 
-    // Main row with all inputs
+    // Main row
     ImVec2 rowCursorStart = ImGui::GetCursorScreenPos();
 
-    // ABS widget with left and right margin
     ImGui::SetCursorScreenPos(ImVec2(rowCursorStart.x + marginAbsLR, rowCursorStart.y));
     renderABS(absW, rowH);
 
     ImGui::SameLine(0.0f, gap);
-
-    // Pedal bars section
-    ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x + gap, rowCursorStart.y));
     renderPedalBars(barsW, rowH);
 
     ImGui::SameLine(0.0f, gapTight);
-
-    // History trace
     renderHistoryTrace(traceW, rowH);
 
     ImGui::SameLine(0.0f, gapTight);
-
-    // Gear + Speed section (removed pixels from gap)
     renderGearSpeed(gearW, rowH);
 
     ImGui::SameLine(0.0f, gapTight);
-
-    // Steering wheel
     renderSteering(steerW, rowH);
 
     ImGui::End();
@@ -135,12 +126,16 @@ void TelemetryWidget::render(utils::WidgetConfig& config, bool editMode) {
     ImGui::PopStyleColor(2);
 }
 
+void TelemetryWidget::setScale(float scale) {
+    m_scale = scale;
+}
+
 void TelemetryWidget::renderShiftLights(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
     float rpmPct = (m_maxRPM > 0) ? std::min(m_currentRPM / m_maxRPM, 1.0f) : 0.0f;
-    int numLights = 7;  // Reduced from 8 - first light removed
+    int numLights = 7;
     float gap = 2.0f * m_scale;
     float lightW = (width - (numLights - 1) * gap) / numLights;
     int activeLights = static_cast<int>(rpmPct * numLights + 0.5f);
@@ -190,7 +185,7 @@ void TelemetryWidget::renderABS(float width, float height) {
     dl->AddCircleFilled(c, r, bgCol, 32);
     dl->AddCircle(c, r, ringCol, 32, 1.5f * m_scale);
 
-    // Only 1 outer arc (removed one of the two)
+    // Only 1 outer arc
     float arcR = r + 3.0f * m_scale;
     float thick = 1.5f * m_scale;
 
@@ -202,19 +197,17 @@ void TelemetryWidget::renderABS(float width, float height) {
     dl->PathArcTo(c, arcR, static_cast<float>(-M_PI * 0.35), static_cast<float>(M_PI * 0.35), 16);
     dl->PathStroke(ringCol, false, thick);
 
-    // "ABS" text - bold and pixelated
+    // "ABS" text
     const char* txt = "ABS";
     ImVec2 ts = ImGui::CalcTextSize(txt);
     float desiredFontSize = r * 0.85f;
     float textScale = desiredFontSize / ts.y;
 
-    ImGui::PushFont(ImGui::GetFont());
     dl->AddText(ImGui::GetFont(),
-                ImGui::GetFontSize() * textScale * 1.2f,  // Make font larger
+                ImGui::GetFontSize() * textScale * 1.2f,
                 ImVec2(c.x - ts.x * textScale * 0.5f,
                        c.y - ts.y * textScale * 0.5f),
                 txtCol, txt);
-    ImGui::PopFont();
 
     ImGui::Dummy(ImVec2(width, height));
 }
@@ -223,9 +216,8 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    // Reduce pedal bars by 15% vertically
     float barHeight = height * 0.85f;
-    float topGap = (height - barHeight) * 0.5f;  // Center the gap
+    float topGap = (height - barHeight) * 0.5f;
 
     float barW = (width - 8.0f * m_scale) / 3.0f;
     float gap = 2.0f * m_scale;
@@ -233,9 +225,9 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
     // Order: Clutch, Brake, Throttle
     float pedals[3] = {m_clutch, m_brake, m_throttle};
     ImU32 colors[3] = {
-        IM_COL32(100, 149, 237, 255),  // Clutch - cornflower blue
-        IM_COL32(255, 0, 0, 255),      // Brake - red
-        IM_COL32(0, 255, 0, 255)       // Throttle - green
+        IM_COL32(100, 149, 237, 255),
+        IM_COL32(255, 0, 0, 255),
+        IM_COL32(0, 255, 0, 255)
     };
 
     for (int i = 0; i < 3; i++) {
@@ -243,18 +235,15 @@ void TelemetryWidget::renderPedalBars(float width, float height) {
         float filledH = barHeight * pedals[i];
         float y = p.y + topGap + (barHeight - filledH);
 
-        // Background bar
         ImVec2 bgTL(x, p.y + topGap);
         ImVec2 bgBR(x + barW, p.y + topGap + barHeight);
         dl->AddRectFilled(bgTL, bgBR, IM_COL32(20, 20, 20, 200));
         dl->AddRect(bgTL, bgBR, IM_COL32(100, 100, 100, 150), 0.0f, 0, 1.0f * m_scale);
 
-        // Filled bar (stronger/bolder)
         ImVec2 filledTL(x, y);
         ImVec2 filledBR(x + barW, p.y + topGap + barHeight);
         dl->AddRectFilled(filledTL, filledBR, colors[i]);
 
-        // Percentage text - center vertically in the gap
         float pctValue = pedals[i] * 100.0f;
         char buf[16];
         snprintf(buf, sizeof(buf), "%.0f", pctValue);
@@ -273,17 +262,14 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    // Draw background without border
     dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), IM_COL32(20, 20, 20, 200));
 
-    // Draw horizontal dotted lines at 0%, 25%, 50%, 75%, 100%
     float lineThickness = 1.0f * m_scale;
     ImU32 gridCol = IM_COL32(80, 80, 80, 100);
     float percentages[5] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
 
     for (int i = 0; i < 5; i++) {
         float y = p.y + height * (1.0f - percentages[i]);
-        // Draw dotted line
         for (float x = p.x; x < p.x + width; x += 4.0f * m_scale) {
             dl->AddLine(
                 ImVec2(x, y),
@@ -294,11 +280,9 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
         }
     }
 
-    // Draw pedal traces (rendered on top of grid)
     float pixelW = width / 256.0f;
-    float traceThickness = 2.0f * m_scale;  // Bolder/stronger traces
+    float traceThickness = 2.0f * m_scale;
 
-    // Clutch (blue) - drawn first (behind)
     for (int i = 0; i < 256; i++) {
         int next = (i + 1) % 256;
         float x1 = p.x + i * pixelW;
@@ -308,7 +292,6 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
         dl->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(100, 149, 237, 200), traceThickness);
     }
 
-    // Brake (red)
     for (int i = 0; i < 256; i++) {
         int next = (i + 1) % 256;
         float x1 = p.x + i * pixelW;
@@ -318,7 +301,6 @@ void TelemetryWidget::renderHistoryTrace(float width, float height) {
         dl->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(255, 0, 0, 200), traceThickness);
     }
 
-    // Throttle (green) - drawn last (on top)
     for (int i = 0; i < 256; i++) {
         int next = (i + 1) % 256;
         float x1 = p.x + i * pixelW;
@@ -335,7 +317,6 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
 
-    // Split into two columns (gear and speed)
     float colW = width * 0.5f;
 
     // GEAR
@@ -351,7 +332,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     float gearX = p.x + colW * 0.5f - gearTextSize.x * gearScale * 0.5f;
     float gearY = p.y + height * 0.5f - gearTextSize.y * gearScale * 0.5f;
 
-    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale * 1.25f,  // Bold and 2px bigger
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * gearScale * 1.25f,
                 ImVec2(gearX, gearY), IM_COL32(255, 255, 255, 255), gearBuf);
 
     // SPEED
@@ -363,7 +344,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
     float speedX = p.x + colW + colW * 0.5f - speedTextSize.x * speedScale * 0.5f;
     float speedY = p.y + height * 0.5f - speedTextSize.y * speedScale * 0.5f;
 
-    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale * 1.25f,  // Bold and 2px bigger
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * speedScale * 1.25f,
                 ImVec2(speedX, speedY), IM_COL32(255, 255, 255, 255), speedBuf);
 
     ImGui::Dummy(ImVec2(width, height));
@@ -378,11 +359,9 @@ void TelemetryWidget::renderSteering(float width, float height) {
     float r = std::min(width, height) * 0.35f;
     float angle = (m_steeringAngle / m_steeringAngleMax) * static_cast<float>(M_PI);
 
-    // Steering wheel circle
     ImU32 wheelCol = IM_COL32(100, 100, 100, 200);
     dl->AddCircle(c, r, wheelCol, 32, 1.5f * m_scale);
 
-    // Steering indicator line
     ImVec2 lineEnd(c.x + r * std::sin(angle), c.y - r * std::cos(angle));
     dl->AddLine(c, lineEnd, IM_COL32(255, 255, 255, 255), 2.0f * m_scale);
 
