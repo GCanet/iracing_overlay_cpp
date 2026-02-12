@@ -1,16 +1,15 @@
 #include "telemetry_widget.h"
-#include "../data/irsdk_manager.h"
 #include "overlay_window.h"
+#include "../iracing/irsdk_manager.h"
+#include "../utils/config.h"
 #include <imgui.h>
-#include <imgui_internal.h>
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-
-// FIXED: Removed STB_IMAGE_IMPLEMENTATION - now in dedicated stb_impl.cpp
+#include <cstring>
+#include <GL/gl.h>
 #include <stb_image.h>
-
-#include <glad/glad.h>
+#include <cstdint>
 
 namespace ui {
 
@@ -202,7 +201,7 @@ void TelemetryWidget::renderABS(float width, float height) {
     // Determine which texture to display
     unsigned int textureToUse = m_absActive ? m_absOnTexture : m_absOffTexture;
 
-    // If we have a texture, render it (HORIZONTAL FLIP ONLY)
+    // If we have a texture, render it (MAINTAIN PRIOR FLIP + ADD HORIZONTAL 180)
     if (textureToUse != 0) {
         float targetSize = std::min(width, height);
         float xOffset = (width - targetSize) * 0.5f;
@@ -211,9 +210,12 @@ void TelemetryWidget::renderABS(float width, float height) {
         ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
         ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
 
-        // HORIZONTAL FLIP ONLY: normal orientation but mirrored left-right
-        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
-        ImVec2 uv1(0.0f, 0.0f);  // Top-left
+        // KEEP EXISTING HORIZONTAL FLIP + ADD EXTRA HORIZONTAL FLIP (180°)
+        // Existing: uv0(1.0f, 1.0f), uv1(0.0f, 0.0f) - horizontal flip
+        // New: reverse X coordinates again for additional horizontal 180°
+        // Result: normal X orientation but double-flipped (net effect: back to normal but treated as 2x horizontal flip)
+        ImVec2 uv0(0.0f, 1.0f);  // Bottom-left (flip X again)
+        ImVec2 uv1(1.0f, 0.0f);  // Top-right (flip X again)
 
         dl->AddImage((ImTextureID)(intptr_t)textureToUse, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));
@@ -394,7 +396,7 @@ void TelemetryWidget::renderGearSpeed(float width, float height) {
 }
 
 // =============================================================================
-// STEERING - Steering wheel with angle indicator (HORIZONTAL FLIP ONLY)
+// STEERING - Steering wheel with angle indicator (MAINTAIN PRIOR FLIP + ADD HORIZONTAL 180)
 // =============================================================================
 void TelemetryWidget::renderSteering(float width, float height) {
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -402,7 +404,7 @@ void TelemetryWidget::renderSteering(float width, float height) {
 
     // If we have a texture, render it
     if (m_steeringTexture != 0) {
-        // FIXED: HORIZONTAL FLIP ONLY and maintain aspect ratio
+        // FIXED: MAINTAIN PRIOR FLIP + ADD EXTRA HORIZONTAL FLIP
         float targetSize = std::min(width, height);
         float xOffset = (width - targetSize) * 0.5f;
         float yOffset = (height - targetSize) * 0.5f;
@@ -410,9 +412,12 @@ void TelemetryWidget::renderSteering(float width, float height) {
         ImVec2 topLeft = ImVec2(p.x + xOffset, p.y + yOffset);
         ImVec2 bottomRight = ImVec2(topLeft.x + targetSize, topLeft.y + targetSize);
 
-        // HORIZONTAL FLIP ONLY: normal orientation but mirrored left-right
-        ImVec2 uv0(1.0f, 1.0f);  // Bottom-right
-        ImVec2 uv1(0.0f, 0.0f);  // Top-left
+        // KEEP EXISTING HORIZONTAL FLIP + ADD EXTRA HORIZONTAL FLIP (180°)
+        // Existing: uv0(1.0f, 1.0f), uv1(0.0f, 0.0f) - horizontal flip
+        // New: reverse X coordinates again for additional horizontal 180°
+        // Result: double horizontal flip (net effect: back to normal but applied as 2x horizontal)
+        ImVec2 uv0(0.0f, 1.0f);  // Bottom-left (flip X again)
+        ImVec2 uv1(1.0f, 0.0f);  // Top-right (flip X again)
 
         dl->AddImage((ImTextureID)(intptr_t)m_steeringTexture, topLeft, bottomRight, uv0, uv1,
                      IM_COL32(255, 255, 255, 255));

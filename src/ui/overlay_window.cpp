@@ -1,69 +1,59 @@
 #include "ui/overlay_window.h"
-#include "utils/config.h"
-#include "data/irsdk_manager.h"
-#include "data/relative_calc.h"
 #include "ui/relative_widget.h"
 #include "ui/telemetry_widget.h"
-#include <iostream>
+#include "data/irsdk_manager.h"
+#include "data/relative_calc.h"
+#include "utils/config.h"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <glad/glad.h>
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
+#include <GLFW/glfw3.h>
+#include <iostream>
 
 #ifdef _WIN32
+    #include <windows.h>
+    #include <dwmapi.h>
+    #pragma comment(lib, "dwmapi.lib")
     #define GLFW_EXPOSE_NATIVE_WIN32
     #include <GLFW/glfw3native.h>
-    #include <Windows.h>
-    #include <dwmapi.h>
 #endif
 
 namespace ui {
 
-OverlayWindow::OverlayWindow()
-    : m_window(nullptr)
-    , m_windowWidth(1920)
-    , m_windowHeight(1080)
-    , m_running(true)
-    , m_editMode(false)
-    , m_globalAlpha(0.9f)
-{
-}
-
-OverlayWindow::~OverlayWindow() {
-    shutdown();
-}
-
-bool OverlayWindow::initialize() {
+bool OverlayWindow::initialize(const char* title, int width, int height) {
     if (!glfwInit()) {
-        std::cerr << "[OverlayWindow] Failed to init GLFW" << std::endl;
+        std::cerr << "Failed to initialize GLFW" << std::endl;
         return false;
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    // GLFW hints for OpenGL context
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
-    glfwWindowHint(GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
     glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    // Create window
-    m_window = glfwCreateWindow(m_windowWidth, m_windowHeight, "iRacing Overlay", nullptr, nullptr);
+    m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!m_window) {
-        std::cerr << "[OverlayWindow] Failed to create GLFW window" << std::endl;
+        std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return false;
     }
 
     glfwMakeContextCurrent(m_window);
-    glfwSwapInterval(0); // No VSync for max overlay responsiveness
+    glfwSwapInterval(1);  // Enable vsync
 
-    // Load OpenGL functions
+    // Load OpenGL functions with GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "[OverlayWindow] Failed to load OpenGL" << std::endl;
+        std::cerr << "Failed to load OpenGL functions" << std::endl;
+        glfwDestroyWindow(m_window);
+        glfwTerminate();
         return false;
     }
 
-    std::cout << "[OverlayWindow] OpenGL " << GLVersion.major << "." << GLVersion.minor << std::endl;
+    std::cout << "OpenGL Version: " << GLVersion.major << "." << GLVersion.minor << std::endl;
 
     // Windows-specific: Make window click-through
     #ifdef _WIN32
@@ -98,65 +88,53 @@ void OverlayWindow::setupImGui() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     
-    // FIXED: Disable imgui.ini to avoid double config files
-    io.IniFilename = nullptr;  // Don't use imgui.ini, we have our own config.ini
+    // Disable imgui.ini to use our own config
+    io.IniFilename = nullptr;
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 8.0f;
     style.FrameRounding = 4.0f;
 
-    // Load Roboto Mono Variable Font with weight 600 (SemiBold)
+    // FIXED: Font loading - try different fonts, fallback to default
     ImFont* robotoFont = nullptr;
-    ImFontConfig fontConfig;
-    fontConfig.SizePixels = 13.0f;
 
-    // Load RobotoMono-VariableFont_wght.ttf
-    // This is the variable font that supports all weights dynamically
+    // Try to load RobotoMono-VariableFont (preferred)
     robotoFont = io.Fonts->AddFontFromFileTTF(
         "assets/fonts/RobotoMono-VariableFont_wght.ttf",
-        13.0f,
-        &fontConfig,
-        nullptr
+        13.0f
     );
 
-    // Fallback: if variable font doesn't exist, try static variants
+    // Fallback variants
     if (!robotoFont) {
         robotoFont = io.Fonts->AddFontFromFileTTF(
             "assets/fonts/RobotoMono-SemiBold.ttf",
-            13.0f,
-            &fontConfig
+            13.0f
         );
     }
 
-    // Fallback: try Bold variant
     if (!robotoFont) {
         robotoFont = io.Fonts->AddFontFromFileTTF(
             "assets/fonts/RobotoMono-Bold.ttf",
-            13.0f,
-            &fontConfig
+            13.0f
         );
     }
 
-    // Fallback: try Medium variant
     if (!robotoFont) {
         robotoFont = io.Fonts->AddFontFromFileTTF(
             "assets/fonts/RobotoMono-Medium.ttf",
-            13.0f,
-            &fontConfig
+            13.0f
         );
     }
 
-    // Fallback: try Regular variant
     if (!robotoFont) {
         robotoFont = io.Fonts->AddFontFromFileTTF(
             "assets/fonts/RobotoMono-Regular.ttf",
-            13.0f,
-            &fontConfig
+            13.0f
         );
     }
 
-    // Final fallback: default ImGui font
+    // Final fallback to default ImGui font
     if (!robotoFont) {
         std::cout << "[OverlayWindow] Warning: RobotoMono font not found, using default ImGui font" << std::endl;
         robotoFont = io.Fonts->AddFontDefault();
@@ -166,23 +144,9 @@ void OverlayWindow::setupImGui() {
 
     io.Fonts->Build();
 
-    const char* glsl_version = "#version 330";
+    // Setup backends
     ImGui_ImplGlfw_InitForOpenGL(m_window, true);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-}
-
-void OverlayWindow::shutdown() {
-    if (m_window) {
-        utils::Config::save("config.ini");
-
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-
-        glfwDestroyWindow(m_window);
-        glfwTerminate();
-        m_window = nullptr;
-    }
+    ImGui_ImplOpenGL3_Init("#version 430 core");
 }
 
 void OverlayWindow::run() {
@@ -190,97 +154,58 @@ void OverlayWindow::run() {
         glfwPollEvents();
 
         // Handle input
-        handleInput();
-
-        // Update SDK - try to connect/reconnect, then poll for new data
-        if (m_sdk) {
-            m_sdk->startup();          // Attempts connection (no-op if already connected)
-            m_sdk->waitForData(0);     // Non-blocking poll for new telemetry data
-            if (m_sdk->isSessionActive()) {
-                m_relative->update();
+        if (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+        }
+        if (glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS) {
+            if (!m_lockKeyPressed) {
+                m_lockKeyPressed = true;
+                utils::Config::getInstance().uiLocked = !utils::Config::getInstance().uiLocked;
             }
+        } else {
+            m_lockKeyPressed = false;
         }
 
-        // Render frame
-        renderFrame();
+        // Update SDK data
+        if (m_sdk) m_sdk->update();
+        if (m_relative) m_relative->update();
+
+        // Render
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Render widgets
+        bool editMode = !utils::Config::getInstance().uiLocked;
+        if (m_relativeWidget) m_relativeWidget->render(m_relative.get(), editMode);
+        if (m_telemetryWidget) m_telemetryWidget->render(editMode);
+
+        ImGui::Render();
+
+        // Clear and render OpenGL
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(m_window);
     }
+
+    shutdown();
 }
 
-void OverlayWindow::handleInput() {
-    // Q to quit
-    if (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) {
-        glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+void OverlayWindow::shutdown() {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    if (m_window) {
+        glfwDestroyWindow(m_window);
     }
+    glfwTerminate();
 
-    // L to toggle edit mode
-    static bool lKeyPressed = false;
-    if (glfwGetKey(m_window, GLFW_KEY_L) == GLFW_PRESS) {
-        if (!lKeyPressed) {
-            m_editMode = !m_editMode;
-            std::cout << "[OverlayWindow] Edit mode: " << (m_editMode ? "ON" : "OFF") << std::endl;
-
-            #ifdef _WIN32
-                HWND hwnd = glfwGetWin32Window(m_window);
-                LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-
-                if (m_editMode) {
-                    // Remove transparent flag: widgets are now draggable
-                    SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_TRANSPARENT);
-                    glfwSetWindowAttrib(m_window, GLFW_MOUSE_PASSTHROUGH, GLFW_FALSE);
-                } else {
-                    // Add transparent flag: overlay is click-through
-                    SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
-                    glfwSetWindowAttrib(m_window, GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
-                }
-            #endif
-
-            lKeyPressed = true;
-        }
-    } else {
-        lKeyPressed = false;
-    }
-}
-
-void OverlayWindow::renderFrame() {
-    // Start ImGui frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    // Render widgets
-    if (m_relativeWidget && m_relative) {
-        m_relativeWidget->render(m_relative.get(), m_editMode);
-    }
-
-    if (m_telemetryWidget && m_sdk) {
-        auto& config = utils::Config::getTelemetryConfig();
-        m_telemetryWidget->render(m_sdk.get(), config, m_editMode);
-    }
-
-    // Show edit mode indicator
-    if (m_editMode) {
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
-                                ImGuiWindowFlags_AlwaysAutoResize |
-                                ImGuiWindowFlags_NoFocusOnAppearing |
-                                ImGuiWindowFlags_NoNav;
-
-        ImGui::Begin("##Status", nullptr, flags);
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "EDIT MODE");
-        ImGui::Text("Press L to lock");
-        ImGui::End();
-    }
-
-    ImGui::Render();
-
-    int display_w, display_h;
-    glfwGetFramebufferSize(m_window, &display_w, &display_h);
-    glViewport(0, 0, display_w, display_h);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-    glfwSwapBuffers(m_window);
+    // Save config
+    utils::Config::save("config.ini");
 }
 
 }  // namespace ui

@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-// stb_image.h included for declaration only — STB_IMAGE_IMPLEMENTATION lives in telemetry_widget.cpp
+// stb_image.h included for declaration only — STB_IMAGE_IMPLEMENTATION lives in stb_impl.cpp
 #include "stb_image.h"
 
 namespace ui {
@@ -68,121 +68,18 @@ unsigned int RelativeWidget::getCarBrandTexture(const std::string& brand) const 
     return (it != m_carBrandTextures.end()) ? it->second : 0;
 }
 
-void RelativeWidget::formatGap(float gap, char* buffer) {
-    if (std::abs(gap) < 0.01f) {
-        snprintf(buffer, 256, "---");
-    } else if (gap > 0) {
-        if (gap >= 1.0f) {
-            snprintf(buffer, 256, "+%.0fL", gap);
-        } else {
-            snprintf(buffer, 256, "+%.1fs", gap);
-        }
-    } else {
-        float a = std::abs(gap);
-        if (a >= 1.0f) {
-            snprintf(buffer, 256, "-%.0fL", a);
-        } else {
-            snprintf(buffer, 256, "-%.1fs", a);
-        }
-    }
-}
-
-void RelativeWidget::formatTime(float seconds, char* buffer) {
-    if (seconds < 0.0f) {
-        snprintf(buffer, 256, "---");
-        return;
-    }
-    int mins = static_cast<int>(seconds / 60.0f);
-    float secs = seconds - (mins * 60.0f);
-    if (mins > 0) {
-        snprintf(buffer, 256, "%d:%05.2f", mins, secs);
-    } else {
-        snprintf(buffer, 256, "%.2f", secs);
-    }
-}
-
-const char* RelativeWidget::getSafetyRatingLetter(float sr) {
-    if (sr < 1.0f) return "R";
-    if (sr < 2.0f) return "D";
-    if (sr < 3.0f) return "C";
-    if (sr < 4.0f) return "B";
-    return "A";
-}
-
-void RelativeWidget::getSafetyRatingColor(float sr, float& r, float& g, float& b) {
-    if (sr < 1.0f) {
-        r = 1.0f; g = 0.2f; b = 0.2f;  // Red
-    } else if (sr < 2.0f) {
-        r = 1.0f; g = 0.6f; b = 0.0f;  // Orange
-    } else if (sr < 3.0f) {
-        r = 1.0f; g = 1.0f; b = 0.0f;  // Yellow
-    } else if (sr < 4.0f) {
-        r = 0.2f; g = 1.0f; b = 0.2f;  // Green
-    } else {
-        r = 0.3f; g = 0.6f; b = 1.0f;  // Blue
-    }
-}
-
-const char* RelativeWidget::getClubFlag(const std::string& club) {
-    if (club == "US") return "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8";
-    if (club == "GB") return "\xF0\x9F\x87\xAC\xF0\x9F\x87\xA7";
-    if (club == "DE") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xAA";
-    if (club == "FR") return "\xF0\x9F\x87\xAB\xF0\x9F\x87\xB7";
-    if (club == "ES") return "\xF0\x9F\x87\xAA\xF0\x9F\x87\xB8";
-    if (club == "IT") return "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB9";
-    if (club == "NL") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB1";
-    if (club == "SE") return "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAA";
-    if (club == "NO") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB4";
-    if (club == "DK") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xB0";
-    if (club == "FI") return "\xF0\x9F\x87\xAB\xF0\x9F\x87\xAE";
-    if (club == "CA") return "\xF0\x9F\x87\xA8\xF0\x9F\x87\xA6";
-    if (club == "AU") return "\xF0\x9F\x87\xA6\xF0\x9F\x87\xBA";
-    if (club == "BR") return "\xF0\x9F\x87\xA7\xF0\x9F\x87\xB7";
-    if (club == "JP") return "\xF0\x9F\x87\xAF\xF0\x9F\x87\xB5";
-    if (club == "KR") return "\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7";
-    if (club == "MX") return "\xF0\x9F\x87\xB2\xF0\x9F\x87\xBD";
-    if (club == "ZA") return "\xF0\x9F\x87\xBF\xF0\x9F\x87\xA6";
-    if (club == "NZ") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xBF";
-    if (club == "SG") return "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAC";
-    return "";
-}
-
 void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode) {
     if (!relative) return;
 
-    auto& config = utils::Config::getRelativeConfig();
+    utils::Config& config = utils::Config::getInstance();
+    bool locked = !editMode && config.uiLocked;
+
     auto drivers = relative->getRelative(4, 4);
-    int numDrivers = static_cast<int>(drivers.size());
+    if (drivers.empty()) return;
 
-    // Calculate dimensions
-    float rowH = ImGui::GetTextLineHeightWithSpacing();
-    float headerH = rowH * 1.5f;
-    float tableH = rowH * std::max(numDrivers, 1);
-    float separatorH = 4.0f * m_scale;
-    float footerH = rowH * 1.5f;
-    float padY = 6.0f * m_scale;
-    float totalH = headerH + separatorH + tableH + separatorH + footerH + padY * 2.0f;
-    float totalW = 520.0f * m_scale;
-
-    ImGui::SetNextWindowSize(ImVec2(totalW, totalH), ImGuiCond_Always);
-
-    if (config.posX < 0 || config.posY < 0) {
-        config.posX = 20.0f;
-        config.posY = 200.0f;
-    }
-    ImGui::SetNextWindowPos(ImVec2(config.posX, config.posY), ImGuiCond_Once);
-
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, config.alpha));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, padY));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 2));
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
-                             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoFocusOnAppearing |
-                             ImGuiWindowFlags_NoNav;
-    if (editMode) {
-        // allow move + resize
+    ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
+    if (!locked) {
+        flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
     } else {
         flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
     }
@@ -228,7 +125,7 @@ void RelativeWidget::render(iracing::RelativeCalculator* relative, bool editMode
 
     ImGui::Separator();
 
-    // === FOOTER ===
+    // === FOOTER - ALWAYS DISPLAY ===
     renderFooter(relative);
 
     ImGui::End();
@@ -271,56 +168,6 @@ void RelativeWidget::renderHeader(iracing::RelativeCalculator* relative) {
     ImGui::Dummy(ImVec2(spacerW, 0.0f));
     ImGui::SameLine(0, 0);
     ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.6f, 1.0f), "SOF: %d", sof);
-
-    ImGui::PopStyleVar();
-}
-
-void RelativeWidget::renderFooter(iracing::RelativeCalculator* relative) {
-    char buf[128];
-    int incidents = relative->getPlayerIncidents();
-    float lastLap = relative->getPlayerLastLap();
-    float bestLap = relative->getPlayerBestLap();
-
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-
-    float totalWidth = ImGui::GetContentRegionAvail().x;
-
-    // Format incidents
-    snprintf(buf, sizeof(buf), "Inc: %d", incidents);
-    ImVec2 incSize = ImGui::CalcTextSize(buf);
-
-    // Format last lap
-    formatTime(lastLap, buf);
-    char lastBuf[128];
-    snprintf(lastBuf, sizeof(lastBuf), "Last: %s", buf);
-    ImVec2 lastSize = ImGui::CalcTextSize(lastBuf);
-
-    // Format best lap
-    formatTime(bestLap, buf);
-    char bestBuf[128];
-    snprintf(bestBuf, sizeof(bestBuf), "Best: %s", buf);
-    ImVec2 bestSize = ImGui::CalcTextSize(bestBuf);
-
-    // Left side: Inc
-    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "Inc: %d", incidents);
-    ImGui::SameLine();
-
-    // Middle: Last lap (centered)
-    float middleX = (totalWidth - lastSize.x) * 0.5f;
-    float currentX = ImGui::GetCursorPosX();
-    float spacerW = std::max(0.0f, middleX - currentX);
-    ImGui::Dummy(ImVec2(spacerW, 0.0f));
-    ImGui::SameLine(0, 0);
-    ImGui::Text("Last: %s", lastBuf);
-    ImGui::SameLine();
-
-    // Right side: Best lap (aligned to the right)
-    float rightX = totalWidth - bestSize.x;
-    currentX = ImGui::GetCursorPosX();
-    spacerW = std::max(0.0f, rightX - currentX);
-    ImGui::Dummy(ImVec2(spacerW, 0.0f));
-    ImGui::SameLine(0, 0);
-    ImGui::TextColored(ImVec4(0.6f, 0.3f, 0.9f, 1.0f), "Best: %s", bestBuf);
 
     ImGui::PopStyleVar();
 }
@@ -413,9 +260,16 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
         dl->AddText(textPos, IM_COL32(255, 255, 255, 255), buffer);
 
         ImGui::Dummy(ImVec2(boxW, boxH));
-        ImGui::SameLine(0, 4);
+
+        // Spacing between SR and license with SAME color background
+        ImGui::SameLine(0, 0);
+        cp = ImGui::GetCursorScreenPos();
+        float spacingW = 2.0f;
+        dl->AddRectFilled(ImVec2(cp.x, cp.y), ImVec2(cp.x + spacingW, cp.y + boxH), lightBgCol, 0.0f);
+        ImGui::Dummy(ImVec2(spacingW, boxH));
 
         // License letter (darker color box)
+        ImGui::SameLine(0, 0);
         cp = ImGui::GetCursorScreenPos();
         textSize = ImGui::CalcTextSize("A");
         boxW = textSize.x + 6.0f;
@@ -497,6 +351,129 @@ void RelativeWidget::renderDriverRow(const iracing::Driver& driver, bool isPlaye
             ImGui::Text("%s", buffer);
         }
     }
+}
+
+void RelativeWidget::renderFooter(iracing::RelativeCalculator* relative) {
+    char buf[128];
+    int incidents = relative->getPlayerIncidents();
+    float lastLap = relative->getPlayerLastLap();
+    float bestLap = relative->getPlayerBestLap();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
+    float totalWidth = ImGui::GetContentRegionAvail().x;
+
+    // Format incidents
+    snprintf(buf, sizeof(buf), "Inc: %d", incidents);
+    ImVec2 incSize = ImGui::CalcTextSize(buf);
+
+    // Format last lap time
+    formatTime(lastLap, buf);
+    ImVec2 lastSize = ImGui::CalcTextSize(buf);
+    char lastBuf[128];
+    snprintf(lastBuf, sizeof(lastBuf), "Last: %s", buf);
+
+    // Format best lap time
+    formatTime(bestLap, buf);
+    ImVec2 bestSize = ImGui::CalcTextSize(buf);
+    char bestBuf[128];
+    snprintf(bestBuf, sizeof(bestBuf), "Best: %s", buf);
+
+    // Left side: Inc
+    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "Inc: %d", incidents);
+    ImGui::SameLine();
+
+    // Middle: Last lap (centered)
+    float middleX = (totalWidth - lastSize.x) * 0.5f;
+    float currentX = ImGui::GetCursorPosX();
+    float spacerW = std::max(0.0f, middleX - currentX);
+    ImGui::Dummy(ImVec2(spacerW, 0.0f));
+    ImGui::SameLine(0, 0);
+    ImGui::Text("%s", buf);
+    ImGui::SameLine();
+
+    // Right side: Best lap (aligned to the right)
+    float rightX = totalWidth - bestSize.x;
+    currentX = ImGui::GetCursorPosX();
+    spacerW = std::max(0.0f, rightX - currentX);
+    ImGui::Dummy(ImVec2(spacerW, 0.0f));
+    ImGui::SameLine(0, 0);
+    ImGui::TextColored(ImVec4(0.6f, 0.3f, 0.9f, 1.0f), "%s", buf);
+
+    ImGui::PopStyleVar();
+}
+
+void RelativeWidget::formatGap(float gap, char* buffer) {
+    if (std::abs(gap) < 0.01f) {
+        snprintf(buffer, 256, "---");
+    } else if (gap > 0) {
+        if (gap >= 1.0f) {
+            snprintf(buffer, 256, "+%.0fL", gap);
+        } else {
+            snprintf(buffer, 256, "+%.1fs", gap);
+        }
+    } else {
+        float a = std::abs(gap);
+        if (a >= 1.0f) {
+            snprintf(buffer, 256, "-%.0fL", a);
+        } else {
+            snprintf(buffer, 256, "-%.1fs", a);
+        }
+    }
+}
+
+void RelativeWidget::formatTime(float seconds, char* buffer) {
+    if (seconds < 0.0f) {
+        snprintf(buffer, 256, "---");
+        return;
+    }
+    int mins = static_cast<int>(seconds / 60.0f);
+    float secs = seconds - (mins * 60.0f);
+    if (mins > 0) {
+        snprintf(buffer, 256, "%d:%05.2f", mins, secs);
+    } else {
+        snprintf(buffer, 256, "%.2f", secs);
+    }
+}
+
+const char* RelativeWidget::getSafetyRatingLetter(float sr) {
+    if (sr < 1.0f) return "R";
+    if (sr < 2.0f) return "D";
+    if (sr < 3.0f) return "C";
+    if (sr < 4.0f) return "B";
+    return "A";
+}
+
+void RelativeWidget::getSafetyRatingColor(float sr, float& r, float& g, float& b) {
+    if (sr < 1.0f) {
+        r = 1.0f; g = 0.2f; b = 0.2f;  // Red
+    } else if (sr < 2.0f) {
+        r = 1.0f; g = 0.6f; b = 0.0f;  // Orange
+    } else if (sr < 3.0f) {
+        r = 1.0f; g = 1.0f; b = 0.0f;  // Yellow
+    } else if (sr < 4.0f) {
+        r = 0.2f; g = 1.0f; b = 0.2f;  // Green
+    } else {
+        r = 0.3f; g = 0.6f; b = 1.0f;  // Blue
+    }
+}
+
+const char* RelativeWidget::getClubFlag(const std::string& club) {
+    if (club == "US") return "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8";
+    if (club == "GB") return "\xF0\x9F\x87\xAC\xF0\x9F\x87\xA7";
+    if (club == "DE") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xAA";
+    if (club == "FR") return "\xF0\x9F\x87\xAB\xF0\x9F\x87\xB7";
+    if (club == "ES") return "\xF0\x9F\x87\xAA\xF0\x9F\x87\xB8";
+    if (club == "IT") return "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB9";
+    if (club == "NL") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB1";
+    if (club == "SE") return "\xF0\x9F\x87\xB8\xF0\x9F\x87\xAA";
+    if (club == "NO") return "\xF0\x9F\x87\xB3\xF0\x9F\x87\xB4";
+    if (club == "DK") return "\xF0\x9F\x87\xA9\xF0\x9F\x87\xB0";
+    if (club == "BR") return "\xF0\x9F\x87\xA7\xF0\x9F\x87\xB7";
+    if (club == "AU") return "\xF0\x9F\x87\xA6\xF0\x9F\x87\xBA";
+    if (club == "JP") return "\xF0\x9F\x87\xAF\xF0\x9F\x87\xB5";
+    if (club == "CN") return "\xF0\x9F\x87\xA8\xF0\x9F\x87\xB3";
+    return "";
 }
 
 }  // namespace ui
